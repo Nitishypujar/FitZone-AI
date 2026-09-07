@@ -3,6 +3,7 @@ const cors = require('cors')
 require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
 const { generateNutritionInsight } = require('./services/nutritionInsights')
+const { buildFitnessContext } = require('./services/fitnessContext')
 
 const supabase = require('./supabase')
 const { generateWorkout } = require('./services/workoutGenerator')
@@ -1407,6 +1408,33 @@ app.get('/api/nutrition/insight', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Nutrition insight generation failed',
+    })
+  }
+})
+
+// FITNESS AI CONTEXT API
+app.get('/api/assistant/context', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    res.json({
+      status: 'success',
+      context,
+    })
+  } catch (error) {
+    console.error('Fitness context error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to build fitness context',
+      error: error.message,
     })
   }
 })
