@@ -8,6 +8,10 @@ const {
   generateAssistantResponse,
 } = require('./services/assistantService')
 
+const {
+  getTodayNutrition,
+} = require('./services/ai/tools/nutritionTool')
+
 const supabase = require('./supabase')
 const { generateWorkout } = require('./services/workoutGenerator')
 
@@ -2118,6 +2122,32 @@ app.get('/api/dashboard', async (req, res) => {
     }
   })
   
+  // AI TOOL: TODAY'S NUTRITION
+  app.get('/api/ai/tools/nutrition/today', async (req, res) => {
+    const user = await authenticateUser(req, res)
+  
+    if (!user) return
+  
+    try {
+      const nutrition = await getTodayNutrition(
+        supabase,
+        user.id
+      )
+  
+      res.json({
+        status: 'success',
+        nutrition,
+      })
+    } catch (error) {
+      console.error('Today nutrition tool error:', error)
+  
+      res.status(500).json({
+        status: 'error',
+        message: 'Unable to retrieve today\'s nutrition',
+      })
+    }
+  })
+
   // ============================================
   // 404 HANDLER
   // ============================================
