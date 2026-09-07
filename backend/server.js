@@ -4,6 +4,9 @@ require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
 const { generateNutritionInsight } = require('./services/nutritionInsights')
 const { buildFitnessContext } = require('./services/fitnessContext')
+const {
+  generateAssistantResponse,
+} = require('./services/assistantService')
 
 const supabase = require('./supabase')
 const { generateWorkout } = require('./services/workoutGenerator')
@@ -1435,6 +1438,47 @@ app.get('/api/assistant/context', async (req, res) => {
       status: 'error',
       message: 'Unable to build fitness context',
       error: error.message,
+    })
+  }
+})
+
+// FITNESS AI CHAT API
+app.post('/api/assistant/chat', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const { question } = req.body
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Assistant question is required',
+      })
+    }
+
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    const assistantResponse = await generateAssistantResponse(
+      question,
+      context
+    )
+    
+    res.json({
+      status: 'success',
+      question: assistantResponse.question,
+      answer: assistantResponse.answer,
+    })
+  } catch (error) {
+    console.error('Assistant chat error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to process assistant request',
     })
   }
 })
