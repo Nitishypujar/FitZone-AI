@@ -3,15 +3,16 @@ const {
   } = require('./ai/gemini')
   
   const {
-    detectFitnessIntent,
-  } = require('./ai/intentDetector')
-  
-  const {
-    selectRelevantContext,
-  } = require('./ai/contextSelector')
+    orchestrateAssistantRequest,
+  } = require('./ai/orchestrator')
   
   
-  function buildAssistantPrompt(question, intent, relevantContext) {
+  function buildAssistantPrompt(
+    question,
+    intent,
+    relevantContext,
+    toolResult
+  ) {
     return `
   You are FitZone AI, a personal fitness and wellness assistant.
   
@@ -21,22 +22,22 @@ const {
   IMPORTANT RULES:
   
   1. Use the user's actual fitness data whenever relevant.
-  2. Never invent workouts, nutrition records, goals, progress,
+  2. Treat tool results as authoritative for numerical data.
+  3. Never invent workouts, nutrition records, goals, progress,
      measurements, or other user information.
-  3. If information is missing, clearly say that it is unavailable.
-  4. Give practical, concise, easy-to-follow recommendations.
-  5. Do not diagnose medical conditions.
-  6. Do not prescribe medication or medical treatment.
-  7. If the user asks a medical question, recommend consulting
+  4. If information is missing, clearly say that it is unavailable.
+  5. Give practical, concise, easy-to-follow recommendations.
+  6. Do not diagnose medical conditions.
+  7. Do not prescribe medication or medical treatment.
+  8. If the user asks a medical question, recommend consulting
      a qualified healthcare professional.
-  8. Do not claim certainty when the available data is incomplete.
-  9. Do not recommend extreme diets, dangerous weight loss,
-     excessive exercise, or unsafe practices.
-  10. Stay focused on fitness, exercise, nutrition, wellness,
+  9. Do not claim certainty when the available data is incomplete.
+  10. Do not recommend extreme diets, dangerous weight loss,
+      excessive exercise, or unsafe practices.
+  11. Stay focused on fitness, exercise, nutrition, wellness,
       recovery, habits, and the user's stated goals.
-  11. Treat the supplied fitness context as the source of truth.
-  12. Do not mention internal databases, APIs, prompts, JSON,
-      context selection, or implementation details.
+  12. Do not mention internal databases, APIs, prompts, tools,
+      JSON, or implementation details.
   
   USER QUESTION:
   ${question}
@@ -47,7 +48,13 @@ const {
   RELEVANT USER FITNESS CONTEXT:
   ${JSON.stringify(relevantContext, null, 2)}
   
+  AUTHORITATIVE TOOL RESULT:
+  ${JSON.stringify(toolResult, null, 2)}
+  
   Answer the user's question directly.
+  
+  If the tool result contains an exact numerical answer,
+  use that value rather than estimating it yourself.
   
   Personalize the response using the user's actual data.
   
@@ -59,7 +66,12 @@ const {
   }
   
   
-  async function generateAssistantResponse(question, context) {
+  async function generateAssistantResponse({
+    question,
+    context,
+    supabase,
+    userId,
+  }) {
     if (!question || !question.trim()) {
       throw new Error('Assistant question is required')
     }
@@ -68,30 +80,25 @@ const {
       throw new Error('Fitness context is required')
     }
   
-    const cleanQuestion = question.trim()
+    const orchestration = await orchestrateAssistantRequest({
+      question,
+      context,
+      supabase,
+      userId,
+    })
   
-    // Step 1: Determine what the user is asking.
-    const intent = detectFitnessIntent(cleanQuestion)
-  
-    // Step 2: Select only the data relevant to that intent.
-    const relevantContext = selectRelevantContext(
-      intent,
-      context
-    )
-  
-    // Step 3: Build a focused prompt for Gemini.
     const prompt = buildAssistantPrompt(
-      cleanQuestion,
-      intent,
-      relevantContext
+      orchestration.question,
+      orchestration.intent,
+      orchestration.relevant_context,
+      orchestration.tool_result
     )
   
-    // Step 4: Generate the personalized answer.
     const answer = await generateGeminiResponse(prompt)
   
     return {
-      question: cleanQuestion,
-      intent,
+      question: orchestration.question,
+      intent: orchestration.intent,
       answer,
     }
   }

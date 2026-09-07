@@ -8,6 +8,8 @@ const {
   generateAssistantResponse,
 } = require('./services/assistantService')
 
+
+
 const {
   getTodayNutrition,
 } = require('./services/ai/tools/nutritionTool')
@@ -1467,10 +1469,12 @@ app.post('/api/assistant/chat', async (req, res) => {
       user.id
     )
 
-    const assistantResponse = await generateAssistantResponse(
+    const assistantResponse = await generateAssistantResponse({
       question,
-      context
-    )
+      context,
+      supabase,
+      userId: user.id,
+    })
     
     res.json({
       status: 'success',
@@ -2148,6 +2152,8 @@ app.get('/api/dashboard', async (req, res) => {
     }
   })
 
+
+  
   // ============================================
   // 404 HANDLER
   // ============================================
