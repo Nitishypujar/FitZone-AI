@@ -1,6 +1,8 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
+const { calculateNutritionTargets } = require('./services/nutritionCalculator')
+const { generateNutritionInsight } = require('./services/nutritionInsights')
 
 const supabase = require('./supabase')
 const { generateWorkout } = require('./services/workoutGenerator')
@@ -1310,6 +1312,148 @@ app.get('/api/goals', async (req, res) => {
       })
     }
   })
+  
+// NUTRITION INSIGHT API
+app.get('/api/nutrition/insight', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select(`
+        age,
+        height_cm,
+        weight_kg,
+        fitness_level,
+        primary_goal,
+        workout_days_per_week
+      `)
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      console.error('Nutrition insight profile error:', profileError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition profile',
+      })
+    }
+
+    const targets = calculateNutritionTargets(profile)
+
+    const { data: nutrition, error: nutritionError } = await supabase
+      .from('nutrition_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('logged_at', { ascending: false })
+
+    if (nutritionError) {
+      console.error('Nutrition insight logs error:', nutritionError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition logs',
+      })
+    }
+
+    const today = new Date()
+
+    const todayMeals = (nutrition || []).filter((meal) => {
+      if (!meal.logged_at) return false
+
+      const mealDate = new Date(meal.logged_at)
+
+      return (
+        mealDate.getFullYear() === today.getFullYear() &&
+        mealDate.getMonth() === today.getMonth() &&
+        mealDate.getDate() === today.getDate()
+      )
+    })
+
+    const totals = todayMeals.reduce(
+      (acc, meal) => {
+        acc.calories += Number(meal.calories || 0)
+        acc.protein_g += Number(meal.protein_g || 0)
+        acc.carbohydrates_g += Number(meal.carbohydrates_g || 0)
+        acc.fats_g += Number(meal.fats_g || 0)
+
+        return acc
+      },
+      {
+        calories: 0,
+        protein_g: 0,
+        carbohydrates_g: 0,
+        fats_g: 0,
+      }
+    )
+
+    const insight = generateNutritionInsight(
+      totals,
+      targets,
+      profile
+    )
+
+    res.json({
+      status: 'success',
+      insight,
+      totals,
+      targets,
+    })
+  } catch (error) {
+    console.error('Nutrition insight exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition insight generation failed',
+    })
+  }
+})
+
+// NUTRITION TARGETS API
+app.get('/api/nutrition/targets', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select(`
+        age,
+        height_cm,
+        weight_kg,
+        fitness_level,
+        primary_goal,
+        workout_days_per_week
+      `)
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Nutrition profile error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition profile',
+      })
+    }
+
+    const targets = calculateNutritionTargets(profile)
+
+    res.json({
+      status: 'success',
+      targets,
+    })
+  } catch (error) {
+    console.error('Nutrition targets exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition target calculation failed',
+    })
+  }
+})
   
   // ============================================
   // NUTRITION API - GET
