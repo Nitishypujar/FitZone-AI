@@ -10,6 +10,10 @@ const {
     getTodayNutrition,
   } = require('./tools/nutritionTool')
   
+  const {
+    getWorkoutData,
+  } = require('./tools/workoutTool')
+  
   
   async function orchestrateAssistantRequest({
     question,
@@ -58,6 +62,13 @@ const {
   
     if (intent === 'nutrition') {
       toolResult = await getTodayNutrition(
+        supabase,
+        userId
+      )
+    }
+  
+    if (intent === 'workout') {
+      toolResult = await getWorkoutData(
         supabase,
         userId
       )
