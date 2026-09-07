@@ -1,222 +1,186 @@
-import { useState } from 'react'
-
-const initialProfile = {
-  goal: 'Build strength',
-  experience: 'Beginner',
-  days: '4 days / week',
-  duration: '45 minutes',
-}
-
-const plans = {
-  'Build strength': [
-    ['MON', 'Upper Body Strength', '45 min'],
-    ['TUE', 'Lower Body Strength', '45 min'],
-    ['THU', 'Full Body Strength', '50 min'],
-    ['SAT', 'Core & Conditioning', '35 min'],
-  ],
-  'Lose weight': [
-    ['MON', 'Full Body Conditioning', '40 min'],
-    ['TUE', 'Cardio & Core', '35 min'],
-    ['THU', 'Strength Circuit', '45 min'],
-    ['SAT', 'Cardio Conditioning', '40 min'],
-  ],
-  'Build muscle': [
-    ['MON', 'Chest & Triceps', '50 min'],
-    ['TUE', 'Back & Biceps', '50 min'],
-    ['THU', 'Legs & Shoulders', '55 min'],
-    ['SAT', 'Upper Body Volume', '45 min'],
-  ],
-  'Improve fitness': [
-    ['MON', 'Full Body Fitness', '40 min'],
-    ['TUE', 'Cardio Conditioning', '35 min'],
-    ['THU', 'Strength & Mobility', '45 min'],
-    ['SAT', 'Endurance Session', '40 min'],
-  ],
-}
+import { useEffect, useState } from 'react'
 
 function AIPlan() {
-  const [profile, setProfile] = useState(initialProfile)
-  const [generated, setGenerated] = useState(false)
+  const [profile, setProfile] = useState(null)
+  const [workout, setWorkout] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
 
-  function handleChange(event) {
-    const { name, value } = event.target
+  const token = localStorage.getItem('fitzone_access_token')
 
-    setProfile((previous) => ({
-      ...previous,
-      [name]: value,
-    }))
+  useEffect(() => {
+    loadProfile()
+  }, [])
 
-    setGenerated(false)
+  async function loadProfile() {
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await fetch('http://localhost:5000/api/profile', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to load profile.')
+      }
+
+      setProfile(data.profile)
+    } catch (error) {
+      console.error('Profile loading error:', error)
+      setError(error.message || 'Unable to load profile.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function generatePlan(event) {
-    event.preventDefault()
-    setGenerated(true)
+  async function generatePlan() {
+    try {
+      setGenerating(true)
+      setError('')
+
+      const response = await fetch(
+        'http://localhost:5000/api/workouts/generate',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to generate workout.')
+      }
+
+      setWorkout(data.workout)
+    } catch (error) {
+      console.error('Workout generation error:', error)
+      setError(error.message || 'Unable to generate workout.')
+    } finally {
+      setGenerating(false)
+    }
   }
 
-  const selectedPlan = plans[profile.goal] || plans['Build strength']
+  if (loading) {
+    return (
+      <div className="page">
+        <h1>AI Plan</h1>
+        <p>Loading your profile...</p>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="page">
+        <h1>AI Plan</h1>
+        <p>{error || 'Profile not found.'}</p>
+      </div>
+    )
+  }
 
   return (
-    <main className="ai-plan-page">
-      <section className="ai-plan-header">
-        <div>
-          <p className="eyebrow">FITZONE AI</p>
+    <div className="page">
+      <h1>Your plan, built around you.</h1>
 
-          <h1>
-            Your plan,
-            <br />
-            <span>built around you.</span>
-          </h1>
+      <p>
+        FitZone AI uses your fitness profile to generate a personalized
+        workout.
+      </p>
+
+      {error && (
+        <p style={{ color: 'red' }}>
+          {error}
+        </p>
+      )}
+
+      <section>
+        <h2>Your Profile</h2>
+
+        <p>
+          <strong>Goal:</strong>{' '}
+          {profile.primary_goal || 'General Fitness'}
+        </p>
+
+        <p>
+          <strong>Experience:</strong>{' '}
+          {profile.fitness_level || 'Beginner'}
+        </p>
+
+        <p>
+          <strong>Training frequency:</strong>{' '}
+          {profile.workout_days_per_week || 3} days / week
+        </p>
+
+        <p>
+          <strong>Session duration:</strong>{' '}
+          {profile.preferred_workout_duration || 45} minutes
+        </p>
+
+        <button
+          onClick={generatePlan}
+          disabled={generating}
+        >
+          {generating ? 'Generating...' : 'Generate My Plan'}
+        </button>
+      </section>
+
+      {workout && (
+        <section>
+          <h2>Generated Workout</h2>
+
+          <h3>{workout.workout_name}</h3>
 
           <p>
-            Tell FitZone AI a little about your goals and training preferences.
-            Your profile will eventually power an adaptive workout planning
-            system.
+            {workout.workout_type} · {workout.duration_minutes} min ·{' '}
+            {workout.difficulty}
           </p>
-        </div>
 
-        <div className="ai-plan-badge">
-          <span className="ai-badge">AI</span>
-          <strong>PERSONALIZATION ENGINE</strong>
-          <p>Prototype mode</p>
-        </div>
-      </section>
+          <h3>Exercises</h3>
 
-      <section className="ai-plan-grid">
-        <article className="ai-profile-card">
-          <div className="dashboard-card-heading">
+          {workout.exercises?.length > 0 ? (
             <div>
-              <p className="eyebrow">YOUR PROFILE</p>
-              <h2>Training preferences</h2>
-            </div>
-          </div>
+              {workout.exercises.map((exercise, index) => (
+                <div key={`${exercise.name}-${index}`}>
+                  <strong>
+                    {index + 1}. {exercise.name}
+                  </strong>
 
-          <form className="ai-profile-form" onSubmit={generatePlan}>
-            <label>
-              Primary goal
-
-              <select
-                name="goal"
-                value={profile.goal}
-                onChange={handleChange}
-              >
-                <option>Build strength</option>
-                <option>Lose weight</option>
-                <option>Build muscle</option>
-                <option>Improve fitness</option>
-              </select>
-            </label>
-
-            <label>
-              Experience level
-
-              <select
-                name="experience"
-                value={profile.experience}
-                onChange={handleChange}
-              >
-                <option>Beginner</option>
-                <option>Intermediate</option>
-                <option>Advanced</option>
-              </select>
-            </label>
-
-            <label>
-              Training frequency
-
-              <select
-                name="days"
-                value={profile.days}
-                onChange={handleChange}
-              >
-                <option>3 days / week</option>
-                <option>4 days / week</option>
-                <option>5 days / week</option>
-                <option>6 days / week</option>
-              </select>
-            </label>
-
-            <label>
-              Session duration
-
-              <select
-                name="duration"
-                value={profile.duration}
-                onChange={handleChange}
-              >
-                <option>30 minutes</option>
-                <option>45 minutes</option>
-                <option>60 minutes</option>
-                <option>75 minutes</option>
-              </select>
-            </label>
-
-            <button type="submit" className="primary-button">
-              Generate My Plan
-            </button>
-          </form>
-        </article>
-
-        <article className="ai-plan-result">
-          <div className="dashboard-card-heading">
-            <div>
-              <p className="eyebrow">GENERATED PLAN</p>
-              <h2>{profile.goal}</h2>
-            </div>
-
-            <span className="ai-badge">AI</span>
-          </div>
-
-          <div className="plan-summary">
-            <div>
-              <span>LEVEL</span>
-              <strong>{profile.experience}</strong>
-            </div>
-
-            <div>
-              <span>FREQUENCY</span>
-              <strong>{profile.days}</strong>
-            </div>
-
-            <div>
-              <span>SESSION</span>
-              <strong>{profile.duration}</strong>
-            </div>
-          </div>
-
-          <div className="generated-plan-list">
-            {selectedPlan.map(([day, workout, duration]) => (
-              <div className="generated-plan-item" key={day}>
-                <span>{day}</span>
-
-                <div>
-                  <strong>{workout}</strong>
-                  <small>{duration}</small>
+                  <p>
+                    {exercise.sets} sets
+                    {exercise.repetitions
+                      ? ` × ${exercise.repetitions} reps`
+                      : ''}
+                    {exercise.duration_seconds
+                      ? ` × ${exercise.duration_seconds} sec`
+                      : ''}
+                    {exercise.rest_seconds
+                      ? ` · ${exercise.rest_seconds}s rest`
+                      : ''}
+                  </p>
                 </div>
-
-                <span className="plan-arrow">→</span>
-              </div>
-            ))}
-          </div>
-
-          {generated && (
-            <div className="plan-generated-message">
-              <span>✓</span>
-              <p>
-                Your prototype plan has been generated from the preferences
-                above.
-              </p>
+              ))}
             </div>
+          ) : (
+            <p>No exercises were generated.</p>
           )}
 
-          <p className="prototype-note">
-            Prototype planning logic. In a later phase, this interface will
-            send your profile to the FitZone AI backend and receive a
-            dynamically generated plan.
+          <p>
+            <strong>Generated by:</strong>{' '}
+            {workout.metadata?.generated_by || 'FitZone AI'}
           </p>
-        </article>
-      </section>
-    </main>
+        </section>
+      )}
+    </div>
   )
 }
 

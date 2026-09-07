@@ -1,497 +1,531 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const API_URL = 'http://localhost:5000'
 
-const meals = [
-  {
-    id: 1,
-    type: 'BREAKFAST',
-    name: 'Protein Oatmeal',
-    calories: 420,
-    protein: 28,
-    carbs: 52,
-    fats: 12,
-  },
-  {
-    id: 2,
-    type: 'LUNCH',
-    name: 'Chicken Rice Bowl',
-    calories: 610,
-    protein: 45,
-    carbs: 68,
-    fats: 16,
-  },
-  {
-    id: 3,
-    type: 'SNACK',
-    name: 'Greek Yogurt & Fruit',
-    calories: 240,
-    protein: 18,
-    carbs: 30,
-    fats: 5,
-  },
-  {
-    id: 4,
-    type: 'DINNER',
-    name: 'Grilled Chicken & Vegetables',
-    calories: 520,
-    protein: 42,
-    carbs: 38,
-    fats: 18,
-  },
-]
+const emptyForm = {
+  meal_type: 'BREAKFAST',
+  meal_name: '',
+  calories: '',
+  protein_g: '',
+  carbohydrates_g: '',
+  fats_g: '',
+}
+
+const mealTypes = ['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER']
 
 function Nutrition() {
-  const [completedMeals, setCompletedMeals] = useState([])
-  const [water, setWater] = useState(5)
-
-  const [habitCompleted, setHabitCompleted] = useState({
-    water: false,
-    sleep: false,
-    stretching: false,
-  })
-
+  const [meals, setMeals] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingMeal, setEditingMeal] = useState(null)
+  const [form, setForm] = useState(emptyForm)
 
-  const calorieGoal = 2000
+  const token = localStorage.getItem('fitzone_access_token')
 
-  const totalCalories = meals.reduce(
-    (total, meal) => total + meal.calories,
-    0,
-  )
-
-  const totalProtein = meals.reduce(
-    (total, meal) => total + meal.protein,
-    0,
-  )
-
-  const totalCarbs = meals.reduce(
-    (total, meal) => total + meal.carbs,
-    0,
-  )
-
-  const totalFats = meals.reduce(
-    (total, meal) => total + meal.fats,
-    0,
-  )
-
-  const calorieProgress = Math.min(
-    Math.round((totalCalories / calorieGoal) * 100),
-    100,
-  )
-
-  useEffect(() => {
-    async function loadNutrition() {
-      try {
-        setLoading(true)
-        setError('')
-
-        const token = localStorage.getItem('fitzone_access_token')
-
-        if (!token) {
-          throw new Error('Authentication token not found')
-        }
-
-        const response = await fetch(`${API_URL}/api/nutrition`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        const data = await response.json()
-
-        if (!response.ok || data.status !== 'success') {
-          throw new Error(
-            data.message || 'Unable to load nutrition tracking',
-          )
-        }
-
-        const nutrition = data.nutrition
-
-        const completed = []
-
-        if (nutrition.breakfast_completed) {
-          completed.push(1)
-        }
-
-        if (nutrition.lunch_completed) {
-          completed.push(2)
-        }
-
-        if (nutrition.snack_completed) {
-          completed.push(3)
-        }
-
-        if (nutrition.dinner_completed) {
-          completed.push(4)
-        }
-
-        setCompletedMeals(completed)
-
-        setWater(
-          Number.isInteger(nutrition.water_glasses)
-            ? nutrition.water_glasses
-            : 5,
-        )
-
-        setHabitCompleted({
-          water: Boolean(nutrition.hydration_completed),
-          sleep: Boolean(nutrition.sleep_completed),
-          stretching: Boolean(nutrition.stretching_completed),
-        })
-      } catch (err) {
-        console.error('Nutrition loading error:', err)
-        setError(err.message || 'Unable to load nutrition tracking')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadNutrition()
-  }, [])
-
-  async function saveNutrition(
-    nextCompletedMeals,
-    nextWater,
-    nextHabits,
-  ) {
+  const fetchMeals = async () => {
     try {
-      setSaving(true)
+      setLoading(true)
       setError('')
 
-      const token = localStorage.getItem('fitzone_access_token')
-
-      if (!token) {
-        throw new Error('Authentication token not found')
-      }
-
       const response = await fetch(`${API_URL}/api/nutrition`, {
-        method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          breakfast_completed: nextCompletedMeals.includes(1),
-          lunch_completed: nextCompletedMeals.includes(2),
-          snack_completed: nextCompletedMeals.includes(3),
-          dinner_completed: nextCompletedMeals.includes(4),
-
-          water_glasses: nextWater,
-
-          hydration_completed: nextHabits.water,
-          sleep_completed: nextHabits.sleep,
-          stretching_completed: nextHabits.stretching,
-        }),
       })
 
       const data = await response.json()
 
-      if (!response.ok || data.status !== 'success') {
-        throw new Error(
-          data.message || 'Unable to save nutrition tracking',
-        )
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to load nutrition data')
       }
+
+      setMeals(Array.isArray(data.nutrition) ? data.nutrition : [])
     } catch (err) {
-      console.error('Nutrition saving error:', err)
-      setError(err.message || 'Unable to save nutrition tracking')
+      setError(err.message || 'Unable to load nutrition data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMeals()
+  }, [])
+
+  const todayMeals = useMemo(() => {
+    const today = new Date().toDateString()
+
+    return meals.filter((meal) => {
+      if (!meal.logged_at) return false
+      return new Date(meal.logged_at).toDateString() === today
+    })
+  }, [meals])
+
+  const totals = useMemo(() => {
+    return todayMeals.reduce(
+      (total, meal) => ({
+        calories: total.calories + Number(meal.calories || 0),
+        protein: total.protein + Number(meal.protein_g || 0),
+        carbs: total.carbs + Number(meal.carbohydrates_g || 0),
+        fats: total.fats + Number(meal.fats_g || 0),
+      }),
+      {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+      }
+    )
+  }, [todayMeals])
+
+  const calorieGoal = 2000
+  const caloriePercentage = Math.min(
+    Math.round((totals.calories / calorieGoal) * 100),
+    100
+  )
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }))
+  }
+
+  const openAddForm = () => {
+    setEditingMeal(null)
+    setForm(emptyForm)
+    setShowForm(true)
+    setError('')
+  }
+
+  const openEditForm = (meal) => {
+    setEditingMeal(meal)
+
+    setForm({
+      meal_type: meal.meal_type || 'BREAKFAST',
+      meal_name: meal.meal_name || '',
+      calories: meal.calories ?? '',
+      protein_g: meal.protein_g ?? '',
+      carbohydrates_g: meal.carbohydrates_g ?? '',
+      fats_g: meal.fats_g ?? '',
+    })
+
+    setShowForm(true)
+    setError('')
+  }
+
+  const closeForm = () => {
+    setShowForm(false)
+    setEditingMeal(null)
+    setForm(emptyForm)
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!form.meal_name.trim()) {
+      setError('Meal name is required')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError('')
+
+      const payload = {
+        meal_type: form.meal_type,
+        meal_name: form.meal_name.trim(),
+        calories: Number(form.calories) || 0,
+        protein_g: Number(form.protein_g) || 0,
+        carbohydrates_g: Number(form.carbohydrates_g) || 0,
+        fats_g: Number(form.fats_g) || 0,
+      }
+
+      const url = editingMeal
+        ? `${API_URL}/api/nutrition/${editingMeal.id}`
+        : `${API_URL}/api/nutrition`
+
+      const method = editingMeal ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to save meal')
+      }
+
+      closeForm()
+      await fetchMeals()
+    } catch (err) {
+      setError(err.message || 'Unable to save meal')
     } finally {
       setSaving(false)
     }
   }
 
-  function toggleMeal(id) {
-    const nextCompletedMeals = completedMeals.includes(id)
-      ? completedMeals.filter((mealId) => mealId !== id)
-      : [...completedMeals, id]
-
-    setCompletedMeals(nextCompletedMeals)
-
-    saveNutrition(
-      nextCompletedMeals,
-      water,
-      habitCompleted,
+  const handleDelete = async (meal) => {
+    const confirmed = window.confirm(
+      `Delete "${meal.meal_name}" from your nutrition log?`
     )
-  }
 
-  function changeWater(value) {
-    const nextWater = Math.max(0, Math.min(value, 8))
+    if (!confirmed) return
 
-    setWater(nextWater)
+    try {
+      setError('')
 
-    saveNutrition(
-      completedMeals,
-      nextWater,
-      habitCompleted,
-    )
-  }
+      const response = await fetch(`${API_URL}/api/nutrition/${meal.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-  function toggleHabit(name) {
-    const nextHabits = {
-      ...habitCompleted,
-      [name]: !habitCompleted[name],
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to delete meal')
+      }
+
+      setMeals((previous) =>
+        previous.filter((item) => item.id !== meal.id)
+      )
+    } catch (err) {
+      setError(err.message || 'Unable to delete meal')
     }
+  }
 
-    setHabitCompleted(nextHabits)
+  const formatMealType = (type) => {
+    if (!type) return 'MEAL'
 
-    saveNutrition(
-      completedMeals,
-      water,
-      nextHabits,
-    )
+    return type.charAt(0) + type.slice(1).toLowerCase()
   }
 
   return (
-    <main className="nutrition-page">
-      <section className="nutrition-header">
+    <main className="dashboard-page nutrition-page">
+      <section className="page-header">
         <div>
-          <p className="eyebrow">NUTRITION & WELLNESS</p>
-
-          <h1>
-            Fuel your
-            <br />
-            <span>progress.</span>
-          </h1>
-
+          <p className="eyebrow">NUTRITION</p>
+          <h1>Fuel Your Progress</h1>
           <p>
-            Keep your nutrition and daily wellness habits organized alongside
-            your training journey.
+            Track your meals and understand your daily nutrition at a glance.
           </p>
         </div>
 
-        <div className="nutrition-calorie-card">
-          <span>DAILY CALORIES</span>
-
-          <strong>{totalCalories}</strong>
-
-          <p>of {calorieGoal} kcal target</p>
-
-          <div className="nutrition-progress-track">
-            <div style={{ width: `${calorieProgress}%` }}></div>
-          </div>
-
-          <small>
-            {Math.max(calorieGoal - totalCalories, 0)} kcal remaining
-          </small>
-        </div>
+        <button className="primary-button" onClick={openAddForm}>
+          + Add Meal
+        </button>
       </section>
 
-      {loading && (
-        <div className="nutrition-status">
-          Loading your nutrition tracking...
-        </div>
-      )}
-
-      {saving && !loading && (
-        <div className="nutrition-status">
-          Saving...
-        </div>
-      )}
-
       {error && (
-        <div className="nutrition-error">
+        <div className="error-message">
           {error}
         </div>
       )}
 
-      <section className="nutrition-macros">
-        <article>
-          <span>PROTEIN</span>
-          <strong>{totalProtein}g</strong>
-          <p>Daily intake</p>
-        </article>
-
-        <article>
-          <span>CARBOHYDRATES</span>
-          <strong>{totalCarbs}g</strong>
-          <p>Daily intake</p>
-        </article>
-
-        <article>
-          <span>FATS</span>
-          <strong>{totalFats}g</strong>
-          <p>Daily intake</p>
-        </article>
-
-        <article>
-          <span>MEALS</span>
-          <strong>{completedMeals.length}/4</strong>
-          <p>Logged today</p>
-        </article>
-      </section>
-
-      <section className="nutrition-main-grid">
-        <article className="nutrition-card">
-          <div className="nutrition-card-heading">
+      <section className="nutrition-summary-grid">
+        <div className="nutrition-card main-calorie-card">
+          <div className="nutrition-card-header">
             <div>
-              <p className="eyebrow">TODAY'S FOOD</p>
-              <h2>Meal overview</h2>
+              <span className="card-label">DAILY CALORIES</span>
+              <h2>
+                {totals.calories}
+                <span> / {calorieGoal} kcal</span>
+              </h2>
             </div>
 
-            <span className="nutrition-date">TODAY</span>
+            <div className="nutrition-icon">🔥</div>
           </div>
 
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: `${caloriePercentage}%` }}
+            />
+          </div>
+
+          <p className="progress-text">
+            {Math.max(calorieGoal - totals.calories, 0)} kcal remaining
+          </p>
+        </div>
+
+        <div className="nutrition-card">
+          <span className="card-label">PROTEIN</span>
+          <h2>{Math.round(totals.protein)}g</h2>
+          <p>Today's intake</p>
+        </div>
+
+        <div className="nutrition-card">
+          <span className="card-label">CARBS</span>
+          <h2>{Math.round(totals.carbs)}g</h2>
+          <p>Today's intake</p>
+        </div>
+
+        <div className="nutrition-card">
+          <span className="card-label">FATS</span>
+          <h2>{Math.round(totals.fats)}g</h2>
+          <p>Today's intake</p>
+        </div>
+      </section>
+
+      <section className="nutrition-section">
+        <div className="section-heading">
+          <div>
+            <span className="card-label">TODAY</span>
+            <h2>Meal Log</h2>
+          </div>
+
+          <span className="meal-count">
+            {todayMeals.length} {todayMeals.length === 1 ? 'meal' : 'meals'}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="empty-state">
+            <h3>Loading nutrition data...</h3>
+            <p>Please wait while your meal history is loaded.</p>
+          </div>
+        ) : todayMeals.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">🍽️</div>
+            <h3>No meals logged today</h3>
+            <p>
+              Start tracking your nutrition by adding your first meal.
+            </p>
+
+            <button className="primary-button" onClick={openAddForm}>
+              + Log Your First Meal
+            </button>
+          </div>
+        ) : (
           <div className="meal-list">
-            {meals.map((meal) => {
-              const completed = completedMeals.includes(meal.id)
-
-              return (
-                <div
-                  className={`meal-item ${completed ? 'completed' : ''}`}
-                  key={meal.id}
-                >
-                  <button
-                    className="meal-check"
-                    onClick={() => toggleMeal(meal.id)}
-                    aria-label={`Mark ${meal.name} as ${
-                      completed ? 'incomplete' : 'complete'
-                    }`}
-                  >
-                    {completed ? '✓' : ''}
-                  </button>
-
-                  <div className="meal-info">
-                    <span>{meal.type}</span>
-                    <strong>{meal.name}</strong>
+            {todayMeals.map((meal) => (
+              <article className="meal-card" key={meal.id}>
+                <div className="meal-card-left">
+                  <div className="meal-type-badge">
+                    {formatMealType(meal.meal_type)}
                   </div>
 
-                  <div className="meal-macros">
-                    <div>
-                      <span>CAL</span>
-                      <strong>{meal.calories}</strong>
-                    </div>
+                  <div>
+                    <h3>{meal.meal_name}</h3>
 
-                    <div>
-                      <span>PRO</span>
-                      <strong>{meal.protein}g</strong>
+                    <div className="meal-macros">
+                      <span>{Number(meal.calories || 0)} kcal</span>
+                      <span>
+                        P {Number(meal.protein_g || 0)}g
+                      </span>
+                      <span>
+                        C {Number(meal.carbohydrates_g || 0)}g
+                      </span>
+                      <span>
+                        F {Number(meal.fats_g || 0)}g
+                      </span>
                     </div>
                   </div>
                 </div>
-              )
-            })}
+
+                <div className="meal-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => openEditForm(meal)}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    className="danger-button"
+                    onClick={() => handleDelete(meal)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
-        </article>
-
-        <article className="nutrition-card hydration-card">
-          <div className="nutrition-card-heading">
-            <div>
-              <p className="eyebrow">HYDRATION</p>
-              <h2>Water intake</h2>
-            </div>
-
-            <span className="water-count">{water}/8</span>
-          </div>
-
-          <div className="water-visual">
-            <div className="water-circle">
-              <strong>{Math.round((water / 8) * 100)}%</strong>
-              <span>DAILY TARGET</span>
-            </div>
-          </div>
-
-          <div className="water-controls">
-            <button
-              type="button"
-              onClick={() => changeWater(water - 1)}
-            >
-              −
-            </button>
-
-            <span>{water} glasses</span>
-
-            <button
-              type="button"
-              onClick={() => changeWater(water + 1)}
-            >
-              +
-            </button>
-          </div>
-
-          <p className="nutrition-note">
-            Staying hydrated throughout the day supports an active routine.
-          </p>
-        </article>
+        )}
       </section>
 
-      <section className="wellness-section">
-        <div className="section-heading">
-          <p className="eyebrow">DAILY WELLNESS</p>
-
-          <h2>Small habits matter.</h2>
-        </div>
-
-        <div className="wellness-grid">
-          <button
-            type="button"
-            className={`wellness-card ${
-              habitCompleted.water ? 'completed' : ''
-            }`}
-            onClick={() => toggleHabit('water')}
-          >
-            <span className="wellness-number">01</span>
-
-            <div>
-              <h3>Hydration</h3>
-              <p>Reach your daily water target.</p>
-            </div>
-
-            <strong>{habitCompleted.water ? '✓' : '○'}</strong>
-          </button>
-
-          <button
-            type="button"
-            className={`wellness-card ${
-              habitCompleted.sleep ? 'completed' : ''
-            }`}
-            onClick={() => toggleHabit('sleep')}
-          >
-            <span className="wellness-number">02</span>
-
-            <div>
-              <h3>Quality Sleep</h3>
-              <p>Prioritize a consistent sleep routine.</p>
-            </div>
-
-            <strong>{habitCompleted.sleep ? '✓' : '○'}</strong>
-          </button>
-
-          <button
-            type="button"
-            className={`wellness-card ${
-              habitCompleted.stretching ? 'completed' : ''
-            }`}
-            onClick={() => toggleHabit('stretching')}
-          >
-            <span className="wellness-number">03</span>
-
-            <div>
-              <h3>Mobility</h3>
-              <p>Take a few minutes for movement and stretching.</p>
-            </div>
-
-            <strong>{habitCompleted.stretching ? '✓' : '○'}</strong>
-          </button>
-        </div>
-      </section>
-
-      <section className="nutrition-ai-insight">
-        <div className="nutrition-ai-icon">AI</div>
+      <section className="nutrition-insight">
+        <div className="insight-icon">✨</div>
 
         <div>
-          <p className="eyebrow">FITZONE AI INSIGHT</p>
+          <span className="card-label">FITZONE AI INSIGHT</span>
 
-          <h2>Your nutrition supports your training routine.</h2>
-
-          <p>
-            Your logged meals currently provide {totalProtein}g of protein and{' '}
-            {totalCalories} kcal. In a future version, FitZone AI can use your
-            goals, workout history, and nutrition data to generate
-            personalized general-wellness insights.
-          </p>
+          {todayMeals.length === 0 ? (
+            <p>
+              Start logging your meals and FitZone AI will use your nutrition
+              history to generate personalized insights later.
+            </p>
+          ) : totals.calories < calorieGoal * 0.5 ? (
+            <p>
+              You've logged {todayMeals.length} meals so far. Keep tracking
+              your meals throughout the day for a clearer picture of your
+              nutrition.
+            </p>
+          ) : (
+            <p>
+              You've logged {Math.round(totals.calories)} kcal today across{' '}
+              {todayMeals.length} {todayMeals.length === 1 ? 'meal' : 'meals'}.
+              Keep your nutrition log updated to build useful progress data.
+            </p>
+          )}
         </div>
       </section>
+
+      {showForm && (
+        <div className="modal-overlay" onClick={closeForm}>
+          <div
+            className="meal-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <span className="card-label">
+                  {editingMeal ? 'UPDATE MEAL' : 'NEW MEAL'}
+                </span>
+
+                <h2>
+                  {editingMeal ? 'Edit Meal' : 'Add Meal'}
+                </h2>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={closeForm}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="meal_type">Meal Type</label>
+
+                <select
+                  id="meal_type"
+                  name="meal_type"
+                  value={form.meal_type}
+                  onChange={handleChange}
+                >
+                  {mealTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {formatMealType(type)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="meal_name">Meal Name</label>
+
+                <input
+                  id="meal_name"
+                  name="meal_name"
+                  type="text"
+                  placeholder="e.g. Chicken Rice Bowl"
+                  value={form.meal_name}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="nutrition-form-grid">
+                <div className="form-group">
+                  <label htmlFor="calories">Calories</label>
+
+                  <input
+                    id="calories"
+                    name="calories"
+                    type="number"
+                    min="0"
+                    placeholder="500"
+                    value={form.calories}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="protein_g">Protein (g)</label>
+
+                  <input
+                    id="protein_g"
+                    name="protein_g"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="30"
+                    value={form.protein_g}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="carbohydrates_g">Carbs (g)</label>
+
+                  <input
+                    id="carbohydrates_g"
+                    name="carbohydrates_g"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="50"
+                    value={form.carbohydrates_g}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="fats_g">Fats (g)</label>
+
+                  <input
+                    id="fats_g"
+                    name="fats_g"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="15"
+                    value={form.fats_g}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeForm}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? 'Saving...'
+                    : editingMeal
+                      ? 'Update Meal'
+                      : 'Save Meal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

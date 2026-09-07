@@ -34,33 +34,63 @@ function Login() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      })
+      const response = await fetch(
+        'http://localhost:5000/api/login',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        }
+      )
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed.')
+        throw new Error(
+          data.message || 'Login failed.'
+        )
       }
 
-      // Store authentication information locally
-      localStorage.setItem('fitzone_user', JSON.stringify(data.user))
+      // IMPORTANT:
+      // server.js returns tokens inside data.session
+      const accessToken = data.session?.access_token
+      const refreshToken = data.session?.refresh_token
+
+      if (!accessToken) {
+        throw new Error(
+          'Login succeeded, but no authentication token was returned.'
+        )
+      }
+
+      // Clear any old authentication data first.
+      localStorage.removeItem('fitzone_access_token')
+      localStorage.removeItem('fitzone_refresh_token')
+      localStorage.removeItem('fitzone_user')
+
+      // Store the NEW session.
       localStorage.setItem(
         'fitzone_access_token',
-        data.session.access_token
+        accessToken
       )
-      localStorage.setItem(
-        'fitzone_refresh_token',
-        data.session.refresh_token
-      )
+
+      if (refreshToken) {
+        localStorage.setItem(
+          'fitzone_refresh_token',
+          refreshToken
+        )
+      }
+
+      if (data.user) {
+        localStorage.setItem(
+          'fitzone_user',
+          JSON.stringify(data.user)
+        )
+      }
 
       navigate('/dashboard')
     } catch (error) {
@@ -68,7 +98,7 @@ function Login() {
 
       setError(
         error.message ||
-          'Unable to sign in. Please check your credentials and try again.'
+          'Unable to sign in. Please try again.'
       )
     } finally {
       setLoading(false)
@@ -90,14 +120,15 @@ function Login() {
           <p className="eyebrow">WELCOME BACK</p>
 
           <h1>
-            Your fitness
+            Continue your
             <br />
-            <span>journey continues.</span>
+            <span>fitness journey.</span>
           </h1>
 
           <p>
-            Sign in to access your workouts, progress, goals, and personalized
-            FitZone AI experience.
+            Sign in to access your workouts, goals,
+            progress, personalized plans, and AI-powered
+            fitness tools.
           </p>
         </div>
 
@@ -105,10 +136,15 @@ function Login() {
           <div className="auth-card-header">
             <h2>Sign in</h2>
 
-            <p>Enter your details to continue.</p>
+            <p>
+              Enter your details to continue.
+            </p>
           </div>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
+          <form
+            className="auth-form"
+            onSubmit={handleSubmit}
+          >
             <label>
               Email address
 
@@ -135,14 +171,20 @@ function Login() {
               />
             </label>
 
-            {error && <p className="auth-error">{error}</p>}
+            {error && (
+              <p className="auth-error">
+                {error}
+              </p>
+            )}
 
             <button
               type="submit"
               className="primary-button auth-submit"
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading
+                ? 'Signing in...'
+                : 'Sign In'}
             </button>
           </form>
 
@@ -152,7 +194,9 @@ function Login() {
 
           <p className="auth-switch">
             Don't have an account?{' '}
-            <Link to="/register">Create one</Link>
+            <Link to="/register">
+              Create account
+            </Link>
           </p>
         </div>
       </section>

@@ -1,17 +1,272 @@
-import { Link } from 'react-router-dom'
-import { useEffect } from 'react'
-import { checkBackend } from '../api'
+import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 
 function Dashboard() {
+  const navigate = useNavigate()
+
+  const [dashboard, setDashboard] = useState(null)
+  const [workouts, setWorkouts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const token = localStorage.getItem('fitzone_access_token')
+
   useEffect(() => {
-    checkBackend()
-      .then((data) => {
-        console.log('Backend connected:', data)
-      })
-      .catch((error) => {
-        console.error('Backend connection failed:', error)
-      })
-   }, [])
+    loadDashboard()
+  }, [])
+
+  async function loadDashboard() {
+    try {
+      setLoading(true)
+      setError('')
+
+      if (!token) {
+        throw new Error('Please log in to view your dashboard.')
+      }
+
+      const [dashboardResponse, workoutsResponse] = await Promise.all([
+        fetch('http://localhost:5000/api/dashboard/summary', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch('http://localhost:5000/api/workouts', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ])
+
+      const dashboardData = await dashboardResponse.json()
+      const workoutsData = await workoutsResponse.json()
+
+      if (!dashboardResponse.ok) {
+        throw new Error(
+          dashboardData.message || 'Unable to load dashboard data.'
+        )
+      }
+
+      if (!workoutsResponse.ok) {
+        throw new Error(
+          workoutsData.message || 'Unable to load workouts.'
+        )
+      }
+
+      setDashboard(dashboardData)
+      setWorkouts(workoutsData.workouts || [])
+    } catch (error) {
+      console.error('Dashboard loading error:', error)
+      setError(error.message || 'Unable to load dashboard.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="dashboard-page">
+        <section className="dashboard-header">
+          <div>
+            <p className="eyebrow">FITZONE AI DASHBOARD</p>
+            <h1>
+              Loading your
+              <br />
+              <span>fitness dashboard.</span>
+            </h1>
+            <p>Getting your latest fitness data...</p>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  if (error) {
+    return (
+      <main className="dashboard-page">
+        <section className="dashboard-header">
+          <div>
+            <p className="eyebrow">FITZONE AI DASHBOARD</p>
+            <h1>
+              Something went
+              <br />
+              <span>wrong.</span>
+            </h1>
+            <p>{error}</p>
+          </div>
+
+          <button className="primary-button" onClick={loadDashboard}>
+            Try Again
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  const summary = dashboard?.summary || dashboard || {}
+
+  const weeklyWorkouts = Number(
+    summary.weekly_completed_workouts ??
+      summary.weekly_workouts ??
+      summary.completed_workouts_this_week ??
+      0
+  )
+
+  const weeklyActiveMinutes = Number(
+    summary.weekly_active_minutes ??
+      summary.active_minutes_this_week ??
+      0
+  )
+
+  const weeklyWorkoutTarget = Number(
+    summary.weekly_workout_target ??
+      summary.workout_target ??
+      7
+  )
+
+  const weeklyActiveMinuteTarget = Number(
+    summary.weekly_active_minute_target ??
+      summary.active_minute_target ??
+      380
+  )
+
+  const totalCompletedWorkouts = Number(
+    summary.total_completed_workouts ??
+      summary.completed_workouts ??
+      0
+  )
+
+  const totalExercisesCompleted = Number(
+    summary.total_exercises_completed ??
+      summary.completed_exercises ??
+      0
+  )
+
+  const totalActiveMinutes = Number(
+    summary.total_active_minutes ??
+      summary.active_minutes ??
+      0
+  )
+
+  const weeklyWorkoutPercentage =
+    weeklyWorkoutTarget > 0
+      ? Math.min(Math.round((weeklyWorkouts / weeklyWorkoutTarget) * 100), 100)
+      : 0
+
+  const weeklyMinutesPercentage =
+    weeklyActiveMinuteTarget > 0
+      ? Math.min(
+          Math.round(
+            (weeklyActiveMinutes / weeklyActiveMinuteTarget) * 100
+          ),
+          100
+        )
+      : 0
+
+  const consistency =
+    weeklyWorkoutTarget > 0
+      ? Math.min(
+          Math.round((weeklyWorkouts / weeklyWorkoutTarget) * 100),
+          100
+        )
+      : 0
+
+  const weeklyScore = Math.round(
+    (weeklyWorkoutPercentage + weeklyMinutesPercentage) / 2
+  )
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const todaysWorkout =
+  workouts.find(
+    (workout) =>
+      workout.scheduled_date === today &&
+      !workout.completed &&
+      Array.isArray(workout.exercises) &&
+      workout.exercises.length > 0
+  ) ||
+  workouts.find(
+    (workout) =>
+      !workout.completed &&
+      Array.isArray(workout.exercises) &&
+      workout.exercises.length > 0
+  ) ||
+  workouts.find(
+    (workout) =>
+      Array.isArray(workout.exercises) &&
+      workout.exercises.length > 0
+  ) ||
+  null
+
+  const exercises = todaysWorkout?.exercises || []
+
+  const workoutIntensity =
+    todaysWorkout?.difficulty
+      ? todaysWorkout.difficulty.charAt(0).toUpperCase() +
+        todaysWorkout.difficulty.slice(1)
+      : 'Moderate'
+
+  const remainingWorkouts = Math.max(
+    weeklyWorkoutTarget - weeklyWorkouts,
+    0
+  )
+
+  const insight =
+    weeklyWorkouts >= weeklyWorkoutTarget
+      ? 'You have reached your weekly workout target. Great consistency — keep building on it.'
+      : remainingWorkouts === 1
+        ? 'You are one workout away from completing your weekly target. Keep the momentum going.'
+        : `You have ${remainingWorkouts} workouts remaining to reach your weekly target.`
+
+  const activityDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+  function getDayDate(dayIndex) {
+    const currentDate = new Date()
+    const currentDay = currentDate.getDay()
+
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+
+    const monday = new Date(currentDate)
+    monday.setDate(currentDate.getDate() + mondayOffset)
+
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + dayIndex)
+
+    return date.toISOString().split('T')[0]
+  }
+
+  function getActivityForDay(dayIndex) {
+    const date = getDayDate(dayIndex)
+
+    const completedWorkout = workouts.find((workout) => {
+      const completionDate = workout.completed_at
+        ? workout.completed_at.split('T')[0]
+        : workout.updated_at
+          ? workout.updated_at.split('T')[0]
+          : workout.scheduled_date
+
+      return workout.completed && completionDate === date
+    })
+
+    if (!completedWorkout) {
+      return {
+        completed: false,
+        height: '12%',
+      }
+    }
+
+    const duration = Number(completedWorkout.duration_minutes || 30)
+
+    const height = Math.min(
+      Math.max(Math.round((duration / 60) * 100), 25),
+      100
+    )
+
+    return {
+      completed: true,
+      height: `${height}%`,
+    }
+  }
+
   return (
     <main className="dashboard-page">
       <section className="dashboard-header">
@@ -39,23 +294,29 @@ function Dashboard() {
         <article className="dashboard-stat-card">
           <span>WEEKLY SCORE</span>
 
-          <strong>78</strong>
+          <strong>{weeklyScore}</strong>
 
-          <p>+8% from last week</p>
+          <p>
+            {weeklyScore >= 75
+              ? 'Great momentum'
+              : 'Keep building consistency'}
+          </p>
         </article>
 
         <article className="dashboard-stat-card">
           <span>WORKOUTS</span>
 
-          <strong>4</strong>
+          <strong>{weeklyWorkouts}</strong>
 
-          <p>of 5 weekly goal</p>
+          <p>of {weeklyWorkoutTarget} weekly goal</p>
         </article>
 
         <article className="dashboard-stat-card">
           <span>ACTIVE TIME</span>
 
-          <strong>2.8h</strong>
+          <strong>
+            {(weeklyActiveMinutes / 60).toFixed(1)}h
+          </strong>
 
           <p>This week</p>
         </article>
@@ -63,9 +324,13 @@ function Dashboard() {
         <article className="dashboard-stat-card">
           <span>CONSISTENCY</span>
 
-          <strong>86%</strong>
+          <strong>{consistency}%</strong>
 
-          <p>Great momentum</p>
+          <p>
+            {consistency >= 75
+              ? 'Great momentum'
+              : 'Keep going'}
+          </p>
         </article>
       </section>
 
@@ -74,35 +339,62 @@ function Dashboard() {
           <div className="dashboard-card-heading">
             <div>
               <p className="eyebrow">TODAY'S PLAN</p>
-              <h2>Upper Body Strength</h2>
+
+              <h2>
+                {todaysWorkout
+                  ? todaysWorkout.workout_name
+                  : 'No workout scheduled'}
+              </h2>
             </div>
 
-            <span className="dashboard-status">READY</span>
+            <span className="dashboard-status">
+              {todaysWorkout?.completed ? 'DONE' : 'READY'}
+            </span>
           </div>
 
           <p className="dashboard-card-description">
-            A focused strength session designed to keep you progressing toward
-            your current fitness goals.
+            {todaysWorkout
+              ? 'Your current workout plan based on your fitness profile and goals.'
+              : 'Generate a personalized workout plan from the AI Plan page.'}
           </p>
 
           <div className="workout-details">
             <div>
               <span>DURATION</span>
-              <strong>45 min</strong>
+
+              <strong>
+                {todaysWorkout?.duration_minutes || 0} min
+              </strong>
             </div>
 
             <div>
               <span>EXERCISES</span>
-              <strong>6</strong>
+
+              <strong>{exercises.length}</strong>
             </div>
 
             <div>
               <span>INTENSITY</span>
-              <strong>Moderate</strong>
+
+              <strong>{workoutIntensity}</strong>
             </div>
           </div>
 
-          <button className="primary-button">Start Workout</button>
+          {todaysWorkout ? (
+            <button
+              className="primary-button"
+              onClick={() => navigate('/workout')}
+            >
+              Start Workout
+            </button>
+          ) : (
+            <button
+              className="primary-button"
+              onClick={() => navigate('/ai-plan')}
+            >
+              Generate Workout
+            </button>
+          )}
         </article>
 
         <article className="dashboard-card ai-insight">
@@ -117,18 +409,17 @@ function Dashboard() {
 
           <div className="ai-insight-content">
             <div className="ai-score">
-              <strong>4/5</strong>
+              <strong>
+                {weeklyWorkouts}/{weeklyWorkoutTarget}
+              </strong>
+
               <span>weekly target</span>
             </div>
 
-            <p>
-              You're one workout away from completing your weekly target.
-              Staying consistent today could help you maintain your current
-              momentum.
-            </p>
+            <p>{insight}</p>
           </div>
 
-          <Link to="/services" className="text-link">
+          <Link to="/progress" className="text-link">
             View fitness insights →
           </Link>
         </article>
@@ -139,47 +430,32 @@ function Dashboard() {
           <div className="dashboard-card-heading">
             <div>
               <p className="eyebrow">PROGRESS</p>
+
               <h2>Weekly activity</h2>
             </div>
 
-            <span className="progress-percent">86%</span>
+            <span className="progress-percent">
+              {consistency}%
+            </span>
           </div>
 
           <div className="weekly-chart">
-            <div className="chart-day">
-              <div className="chart-bar completed" style={{ height: '78%' }}></div>
-              <span>MON</span>
-            </div>
+            {activityDays.map((day, index) => {
+              const activity = getActivityForDay(index)
 
-            <div className="chart-day">
-              <div className="chart-bar completed" style={{ height: '92%' }}></div>
-              <span>TUE</span>
-            </div>
+              return (
+                <div className="chart-day" key={day}>
+                  <div
+                    className={`chart-bar ${
+                      activity.completed ? 'completed' : ''
+                    }`}
+                    style={{ height: activity.height }}
+                  ></div>
 
-            <div className="chart-day">
-              <div className="chart-bar" style={{ height: '45%' }}></div>
-              <span>WED</span>
-            </div>
-
-            <div className="chart-day">
-              <div className="chart-bar completed" style={{ height: '82%' }}></div>
-              <span>THU</span>
-            </div>
-
-            <div className="chart-day">
-              <div className="chart-bar completed" style={{ height: '65%' }}></div>
-              <span>FRI</span>
-            </div>
-
-            <div className="chart-day">
-              <div className="chart-bar" style={{ height: '30%' }}></div>
-              <span>SAT</span>
-            </div>
-
-            <div className="chart-day">
-              <div className="chart-bar" style={{ height: '20%' }}></div>
-              <span>SUN</span>
-            </div>
+                  <span>{day}</span>
+                </div>
+              )
+            })}
           </div>
         </article>
 
@@ -187,6 +463,7 @@ function Dashboard() {
           <div className="dashboard-card-heading">
             <div>
               <p className="eyebrow">YOUR GOALS</p>
+
               <h2>Current focus</h2>
             </div>
           </div>
@@ -194,33 +471,55 @@ function Dashboard() {
           <div className="goal-item">
             <div>
               <span>Weekly workouts</span>
-              <strong>4 / 5</strong>
+
+              <strong>
+                {weeklyWorkouts} / {weeklyWorkoutTarget}
+              </strong>
             </div>
 
             <div className="goal-progress">
-              <div style={{ width: '80%' }}></div>
+              <div
+                style={{
+                  width: `${weeklyWorkoutPercentage}%`,
+                }}
+              ></div>
             </div>
           </div>
 
           <div className="goal-item">
             <div>
               <span>Active minutes</span>
-              <strong>168 / 200</strong>
+
+              <strong>
+                {weeklyActiveMinutes} / {weeklyActiveMinuteTarget}
+              </strong>
             </div>
 
             <div className="goal-progress">
-              <div style={{ width: '84%' }}></div>
+              <div
+                style={{
+                  width: `${weeklyMinutesPercentage}%`,
+                }}
+              ></div>
             </div>
           </div>
 
           <div className="goal-item">
             <div>
-              <span>Monthly consistency</span>
-              <strong>86%</strong>
+              <span>Completed workouts</span>
+
+              <strong>{totalCompletedWorkouts}</strong>
             </div>
 
             <div className="goal-progress">
-              <div style={{ width: '86%' }}></div>
+              <div
+                style={{
+                  width: `${Math.min(
+                    totalCompletedWorkouts * 10,
+                    100
+                  )}%`,
+                }}
+              ></div>
             </div>
           </div>
         </article>

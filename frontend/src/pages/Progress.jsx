@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const API_URL = 'http://localhost:5000'
 
 function Progress() {
   const [progress, setProgress] = useState([])
   const [workouts, setWorkouts] = useState([])
-  const [goal, setGoal] = useState(null)
-
+  const [workoutLogs, setWorkoutLogs] = useState([])
+  const [goals, setGoals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -33,90 +33,155 @@ function Progress() {
       const [
         progressResponse,
         workoutsResponse,
+        logsResponse,
         goalsResponse,
       ] = await Promise.all([
-        fetch(`${API_URL}/api/progress`, { headers }),
-        fetch(`${API_URL}/api/workouts`, { headers }),
-        fetch(`${API_URL}/api/goals`, { headers }),
+        fetch(`${API_URL}/api/progress`, {
+          method: 'GET',
+          headers,
+        }),
+
+        fetch(`${API_URL}/api/workouts`, {
+          method: 'GET',
+          headers,
+        }),
+
+        fetch(`${API_URL}/api/workout-logs`, {
+          method: 'GET',
+          headers,
+        }),
+
+        fetch(`${API_URL}/api/goals`, {
+          method: 'GET',
+          headers,
+        }),
       ])
 
       const progressData = await progressResponse.json()
       const workoutsData = await workoutsResponse.json()
+      const logsData = await logsResponse.json()
       const goalsData = await goalsResponse.json()
 
       if (!progressResponse.ok) {
         throw new Error(
           progressData.message ||
-            'Failed to load progress data.',
+            'Unable to load progress data.'
         )
       }
 
       if (!workoutsResponse.ok) {
         throw new Error(
           workoutsData.message ||
-            'Failed to load workouts.',
+            'Unable to load workouts.'
+        )
+      }
+
+      if (!logsResponse.ok) {
+        throw new Error(
+          logsData.message ||
+            'Unable to load workout activity.'
         )
       }
 
       if (!goalsResponse.ok) {
         throw new Error(
           goalsData.message ||
-            'Failed to load goals.',
+            'Unable to load goals.'
         )
       }
 
       setProgress(progressData.progress || [])
       setWorkouts(workoutsData.workouts || [])
-
-      if (
-        goalsData.goals &&
-        goalsData.goals.length > 0
-      ) {
-        setGoal(goalsData.goals[0])
-      } else {
-        setGoal(null)
-      }
+      setWorkoutLogs(logsData.logs || [])
+      setGoals(goalsData.goals || [])
     } catch (err) {
-      console.error('Progress loading error:', err)
+      console.error(
+        'Progress loading error:',
+        err
+      )
 
       setError(
         err.message ||
-          'Something went wrong while loading progress.',
+          'Unable to load progress.'
       )
     } finally {
       setLoading(false)
     }
   }
 
-  /*
-   * Use the latest progress entry when available.
-   */
   const latestProgress =
     progress.length > 0
-      ? progress[0]
+      ? progress[progress.length - 1]
+      : null
+
+  const latestGoal =
+    goals.length > 0
+      ? goals[0]
       : null
 
   /*
-   * Read the current goal fields.
+   * Total completed workouts.
+   *
+   * We use the workouts table directly.
+   * This prevents one workout with multiple completed
+   * exercises from being counted multiple times.
    */
+  const totalWorkouts = useMemo(() => {
+    return workouts.filter(
+      (workout) => workout.completed === true
+    ).length
+  }, [workouts])
+
+  /*
+   * Total completed exercises.
+   */
+  const totalExercisesCompleted = useMemo(() => {
+    return workoutLogs.filter(
+      (log) => log.completed === true
+    ).length
+  }, [workoutLogs])
+
+  /*
+   * Total active minutes.
+   *
+   * Completed workouts contain their actual duration.
+   */
+  const totalActiveMinutes = useMemo(() => {
+    return workouts
+      .filter(
+        (workout) => workout.completed === true
+      )
+      .reduce(
+        (total, workout) =>
+          total +
+          Number(workout.duration_minutes || 0),
+        0
+      )
+  }, [workouts])
+
   const weeklyWorkoutTarget =
-    goal?.weekly_workout_target !== null &&
-    goal?.weekly_workout_target !== undefined
-      ? Number(goal.weekly_workout_target)
+    latestGoal?.weekly_workout_target !==
+      null &&
+    latestGoal?.weekly_workout_target !==
+      undefined
+      ? Number(
+          latestGoal.weekly_workout_target
+        )
       : 0
 
   const weeklyActiveMinuteTarget =
-    goal?.weekly_active_minute_target !== null &&
-    goal?.weekly_active_minute_target !== undefined
-      ? Number(goal.weekly_active_minute_target)
+    latestGoal?.weekly_active_minute_target !==
+      null &&
+    latestGoal?.weekly_active_minute_target !==
+      undefined
+      ? Number(
+          latestGoal.weekly_active_minute_target
+        )
       : 0
 
-  /*
-   * Determine the beginning of the current week.
-   * Monday is treated as the first day.
-   */
   function getStartOfWeek(date) {
     const result = new Date(date)
+
     const day = result.getDay()
 
     const difference =
@@ -125,7 +190,7 @@ function Progress() {
         : 1 - day
 
     result.setDate(
-      result.getDate() + difference,
+      result.getDate() + difference
     )
 
     result.setHours(0, 0, 0, 0)
@@ -137,87 +202,104 @@ function Progress() {
     getStartOfWeek(new Date())
 
   /*
-   * Only COMPLETED workouts count toward progress.
-   *
-   * We intentionally use the workouts table here
-   * instead of workout_logs.
-   *
-   * One workout can contain many exercise logs,
-   * so counting exercise logs would inflate progress.
+   * Completed workouts this week.
    */
   const completedWorkoutsThisWeek =
-    workouts.filter((workout) => {
-      if (!workout.completed) {
-        return false
-      }
+    useMemo(() => {
+      return workouts.filter((workout) => {
+        if (!workout.completed) {
+          return false
+        }
 
-      const workoutDate =
-        workout.scheduled_date
-          ? new Date(
-              `${workout.scheduled_date}T00:00:00`,
-            )
-          : new Date(workout.created_at)
+        const dateSource =
+          workout.completed_at ||
+          workout.updated_at ||
+          workout.created_at ||
+          workout.scheduled_date
 
-      return workoutDate >= startOfWeek
-    })
+        if (!dateSource) {
+          return false
+        }
+
+        const date = new Date(dateSource)
+
+        return date >= startOfWeek
+      }).length
+    }, [workouts, startOfWeek])
 
   /*
-   * Number of completed workouts this week.
-   */
-  const completedWorkoutCount =
-    completedWorkoutsThisWeek.length
-
-  /*
-   * Active minutes come from the workout's
-   * duration_minutes field.
+   * Active minutes this week.
    *
-   * This is more accurate than adding individual
-   * exercise duration_seconds values.
+   * Uses completed workouts and their duration.
    */
   const activeMinutesThisWeek =
-    Math.round(
-      completedWorkoutsThisWeek.reduce(
-        (total, workout) => {
-          const duration =
-            Number(
-              workout.duration_minutes,
-            ) || 0
+    useMemo(() => {
+      return workouts
+        .filter((workout) => {
+          if (!workout.completed) {
+            return false
+          }
 
-          return total + duration
-        },
-        0,
-      ),
-    )
+          const dateSource =
+            workout.completed_at ||
+            workout.updated_at ||
+            workout.created_at ||
+            workout.scheduled_date
+
+          if (!dateSource) {
+            return false
+          }
+
+          const date = new Date(dateSource)
+
+          return date >= startOfWeek
+        })
+        .reduce(
+          (total, workout) =>
+            total +
+            Number(
+              workout.duration_minutes || 0
+            ),
+          0
+        )
+    }, [workouts, startOfWeek])
 
   /*
-   * Percent calculations.
+   * Weekly workout target percentage.
    */
-  const workoutPercentage =
+  const workoutTargetPercentage =
     weeklyWorkoutTarget > 0
       ? Math.min(
           100,
           Math.round(
-            (completedWorkoutCount /
+            (completedWorkoutsThisWeek /
               weeklyWorkoutTarget) *
-              100,
-          ),
+              100
+          )
         )
       : 0
 
-  const activeMinutesPercentage =
+  /*
+   * Weekly active-minute target percentage.
+   */
+  const activeMinuteTargetPercentage =
     weeklyActiveMinuteTarget > 0
       ? Math.min(
           100,
           Math.round(
             (activeMinutesThisWeek /
               weeklyActiveMinuteTarget) *
-              100,
-          ),
+              100
+          )
         )
       : 0
 
   /*
    * Fitness score.
+   *
+   * This will eventually be calculated by our AI/ML
+   * progress system. For now we use the latest
+   * stored value.
    */
   const fitnessScore =
     latestProgress?.fitness_score !== null &&
@@ -228,62 +310,69 @@ function Progress() {
   /*
    * Weekly activity chart.
    *
-   * Each completed workout is counted once
-   * on its scheduled/created day.
+   * One completed workout = one activity.
    */
-  const weeklyActivity = [
-    { day: 'Mon', workouts: 0 },
-    { day: 'Tue', workouts: 0 },
-    { day: 'Wed', workouts: 0 },
-    { day: 'Thu', workouts: 0 },
-    { day: 'Fri', workouts: 0 },
-    { day: 'Sat', workouts: 0 },
-    { day: 'Sun', workouts: 0 },
-  ]
+  const weeklyActivity = useMemo(() => {
+    const days = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ]
 
-  completedWorkoutsThisWeek.forEach(
-    (workout) => {
-      const workoutDate =
-        workout.scheduled_date
-          ? new Date(
-              `${workout.scheduled_date}T00:00:00`,
-            )
-          : new Date(workout.created_at)
+    return days.map((day, index) => {
+      const date = new Date(startOfWeek)
 
-      const day = workoutDate.getDay()
+      date.setDate(
+        date.getDate() + index
+      )
 
-      const dayIndex =
-        day === 0
-          ? 6
-          : day - 1
+      const dateKey =
+        date.toISOString().split('T')[0]
 
-      weeklyActivity[dayIndex].workouts += 1
-    },
-  )
+      const workoutCount =
+        workouts.filter((workout) => {
+          if (!workout.completed) {
+            return false
+          }
+
+          const dateSource =
+            workout.completed_at ||
+            workout.updated_at ||
+            workout.created_at ||
+            workout.scheduled_date
+
+          if (!dateSource) {
+            return false
+          }
+
+          const workoutDate =
+            new Date(dateSource)
+              .toISOString()
+              .split('T')[0]
+
+          return workoutDate === dateKey
+        }).length
+
+      return {
+        day,
+        workouts: workoutCount,
+      }
+    })
+  }, [workouts, startOfWeek])
 
   const maxDailyWorkouts = Math.max(
     1,
     ...weeklyActivity.map(
-      (item) => item.workouts,
-    ),
+      (item) => item.workouts
+    )
   )
 
   /*
-   * Consistency represents how evenly the user
-   * has distributed workouts across the week.
-   */
-  const activeDays =
-    weeklyActivity.filter(
-      (item) => item.workouts > 0,
-    ).length
-
-  const averageWeeklyActivity =
-    Math.round(
-      (activeDays / 7) * 100,
-    )
-
-  /*
-   * Current goal display name.
+   * Goal display name.
    */
   const goalTitleMap = {
     strength: 'Build Strength',
@@ -293,224 +382,230 @@ function Progress() {
   }
 
   const goalTitle =
-    goalTitleMap[goal?.goal_type] ||
+    goalTitleMap[latestGoal?.goal_type] ||
     'Set a Fitness Goal'
 
+  /*
+   * Loading state.
+   */
   if (loading) {
     return (
-      <main className="page-container">
-        <section className="page-header">
-          <p className="eyebrow">
-            PROGRESS
-          </p>
+      <main className="progress-page">
+        <section className="progress-header">
+          <div>
+            <p className="eyebrow">
+              PROGRESS INTELLIGENCE
+            </p>
 
-          <h1>
-            Track Your Progress
-          </h1>
+            <h1>
+              Loading your
+              <br />
+              <span>progress.</span>
+            </h1>
 
-          <p>
-            Loading your latest fitness
-            data...
-          </p>
+            <p>
+              Fetching your latest fitness
+              and workout data...
+            </p>
+          </div>
         </section>
       </main>
     )
   }
 
+  /*
+   * Error state.
+   */
   if (error) {
     return (
-      <main className="page-container">
-        <section className="page-header">
-          <p className="eyebrow">
-            PROGRESS
-          </p>
+      <main className="progress-page">
+        <section className="progress-header">
+          <div>
+            <p className="eyebrow">
+              PROGRESS INTELLIGENCE
+            </p>
 
-          <h1>
-            Track Your Progress
-          </h1>
+            <h1>
+              Something went
+              <br />
+              <span>wrong.</span>
+            </h1>
 
-          <p>{error}</p>
+            <p>{error}</p>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={loadProgressData}
+            >
+              Try Again
+            </button>
+          </div>
         </section>
       </main>
     )
   }
 
   return (
-    <main className="page-container">
-      <section className="page-header">
-        <p className="eyebrow">
-          PROGRESS
-        </p>
+    <main className="progress-page">
 
-        <h1>
-          Track Your Progress
-        </h1>
+      {/* HEADER */}
+      <section className="progress-header">
+        <div>
+          <p className="eyebrow">
+            PROGRESS INTELLIGENCE
+          </p>
 
-        <p>
-          Monitor your workouts,
-          activity, consistency, and
-          progress toward your current
-          fitness goal.
-        </p>
-      </section>
+          <h1>
+            Your fitness
+            <br />
+            <span>progress.</span>
+          </h1>
 
-      <section className="stats-grid">
-        <div className="stat-card">
-          <span className="stat-label">
-            WEEKLY SCORE
-          </span>
-
-          <strong className="stat-value">
-            {fitnessScore || 0}
-          </strong>
-
-          <span className="stat-meta">
-            Current fitness score
-          </span>
-        </div>
-
-        <div className="stat-card">
-          <span className="stat-label">
-            WORKOUTS
-          </span>
-
-          <strong className="stat-value">
-            {completedWorkoutCount}
-
-            <span className="stat-target">
-              / {weeklyWorkoutTarget || 0}
-            </span>
-          </strong>
-
-          <span className="stat-meta">
-            Weekly workout goal
-          </span>
-        </div>
-
-        <div className="stat-card">
-          <span className="stat-label">
-            ACTIVE TIME
-          </span>
-
-          <strong className="stat-value">
-            {activeMinutesThisWeek}
-
-            <span className="stat-target">
-              {' '}
-              min
-            </span>
-          </strong>
-
-          <span className="stat-meta">
-            Target:{' '}
-            {weeklyActiveMinuteTarget ||
-              0}{' '}
-            min
-          </span>
-        </div>
-
-        <div className="stat-card">
-          <span className="stat-label">
-            CONSISTENCY
-          </span>
-
-          <strong className="stat-value">
-            {averageWeeklyActivity}%
-          </strong>
-
-          <span className="stat-meta">
-            Weekly activity
-          </span>
+          <p>
+            Track your training consistency,
+            activity, and fitness progress.
+          </p>
         </div>
       </section>
 
+      {/* OVERVIEW */}
       <section className="progress-section">
         <div className="section-heading">
           <div>
             <p className="eyebrow">
-              CURRENT GOAL
+              OVERVIEW
             </p>
 
-            <h2>{goalTitle}</h2>
+            <h2>Your Numbers</h2>
           </div>
         </div>
 
-        {!goal ? (
-          <div className="empty-state">
-            <p>
-              No fitness goal has
-              been created yet.
-            </p>
+        <div className="stats-grid">
 
-            <p>
-              Go to the Goals page and
-              create your first goal.
-            </p>
+          <div className="stat-card">
+            <span>
+              Completed Workouts
+            </span>
+
+            <strong>
+              {totalWorkouts}
+            </strong>
           </div>
-        ) : (
-          <div className="goal-progress-grid">
-            <div className="progress-card">
-              <div className="progress-card-header">
-                <div>
-                  <span>
-                    WEEKLY WORKOUTS
-                  </span>
 
-                  <h3>
-                    {completedWorkoutCount}{' '}
-                    /{' '}
-                    {weeklyWorkoutTarget}
-                  </h3>
-                </div>
+          <div className="stat-card">
+            <span>
+              Exercises Completed
+            </span>
 
-                <strong>
-                  {workoutPercentage}%
-                </strong>
-              </div>
-
-              <div className="progress-bar">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${workoutPercentage}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="progress-card">
-              <div className="progress-card-header">
-                <div>
-                  <span>
-                    ACTIVE MINUTES
-                  </span>
-
-                  <h3>
-                    {activeMinutesThisWeek}{' '}
-                    /{' '}
-                    {weeklyActiveMinuteTarget}{' '}
-                    min
-                  </h3>
-                </div>
-
-                <strong>
-                  {activeMinutesPercentage}%
-                </strong>
-              </div>
-
-              <div className="progress-bar">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${activeMinutesPercentage}%`,
-                  }}
-                />
-              </div>
-            </div>
+            <strong>
+              {totalExercisesCompleted}
+            </strong>
           </div>
-        )}
+
+          <div className="stat-card">
+            <span>
+              Active Minutes
+            </span>
+
+            <strong>
+              {totalActiveMinutes}
+            </strong>
+          </div>
+
+          <div className="stat-card">
+            <span>
+              Fitness Score
+            </span>
+
+            <strong>
+              {fitnessScore}
+            </strong>
+          </div>
+
+        </div>
       </section>
 
+      {/* WEEKLY TARGETS */}
+      <section className="progress-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">
+              WEEKLY TARGETS
+            </p>
+
+            <h2>This Week</h2>
+          </div>
+        </div>
+
+        <div className="progress-grid">
+
+          <div className="progress-card">
+
+            <div className="progress-card-header">
+              <span>
+                Workouts
+              </span>
+
+              <strong>
+                {completedWorkoutsThisWeek}
+                {' / '}
+                {weeklyWorkoutTarget || 0}
+              </strong>
+            </div>
+
+            <div className="progress-bar">
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: `${workoutTargetPercentage}%`,
+                }}
+              />
+            </div>
+
+            <p>
+              {weeklyWorkoutTarget === 0
+                ? 'Set a weekly workout target in Goals.'
+                : `${completedWorkoutsThisWeek} of ${weeklyWorkoutTarget} weekly workouts completed.`}
+            </p>
+
+          </div>
+
+          <div className="progress-card">
+
+            <div className="progress-card-header">
+              <span>
+                Active Minutes
+              </span>
+
+              <strong>
+                {activeMinutesThisWeek}
+                {' / '}
+                {weeklyActiveMinuteTarget || 0}
+              </strong>
+            </div>
+
+            <div className="progress-bar">
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: `${activeMinuteTargetPercentage}%`,
+                }}
+              />
+            </div>
+
+            <p>
+              {weeklyActiveMinuteTarget === 0
+                ? 'Set an active-minute target in Goals.'
+                : `${activeMinutesThisWeek} of ${weeklyActiveMinuteTarget} weekly active minutes completed.`}
+            </p>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* WEEKLY ACTIVITY */}
       <section className="progress-section">
         <div className="section-heading">
           <div>
@@ -525,44 +620,48 @@ function Progress() {
         </div>
 
         <div className="weekly-chart">
-          {weeklyActivity.map(
-            (item) => {
-              const height =
-                item.workouts === 0
-                  ? 4
-                  : Math.max(
-                      12,
-                      (item.workouts /
-                        maxDailyWorkouts) *
-                        100,
-                    )
 
-              return (
-                <div
-                  className="chart-column"
-                  key={item.day}
-                >
-                  <div className="chart-bar-wrapper">
-                    <div
-                      className="chart-bar"
-                      style={{
-                        height: `${height}%`,
-                      }}
-                      title={`${item.workouts} workout(s)`}
-                    />
-                  </div>
+          {weeklyActivity.map((item) => {
+            const height =
+              item.workouts === 0
+                ? 4
+                : Math.max(
+                    12,
+                    (item.workouts /
+                      maxDailyWorkouts) *
+                      100
+                  )
 
-                  <span>
-                    {item.day}
-                  </span>
+            return (
+              <div
+                className="chart-column"
+                key={item.day}
+              >
+
+                <div className="chart-bar-wrapper">
+                  <div
+                    className="chart-bar"
+                    style={{
+                      height: `${height}%`,
+                    }}
+                    title={`${item.workouts} workout(s)`}
+                  />
                 </div>
-              )
-            },
-          )}
+
+                <span>
+                  {item.day}
+                </span>
+
+              </div>
+            )
+          })}
+
         </div>
       </section>
 
+      {/* AI INSIGHT */}
       <section className="progress-section">
+
         <div className="section-heading">
           <div>
             <p className="eyebrow">
@@ -576,31 +675,33 @@ function Progress() {
         </div>
 
         <div className="insight-card">
+
           <strong>
-            {completedWorkoutCount} /{' '}
-            {weeklyWorkoutTarget || 0}{' '}
-            weekly workouts completed.
+            {goalTitle}
           </strong>
 
           <p>
             {weeklyWorkoutTarget === 0
               ? 'Set a weekly workout goal to start tracking your target.'
-              : completedWorkoutCount >=
-                weeklyWorkoutTarget
+              : completedWorkoutsThisWeek >=
+                  weeklyWorkoutTarget
                 ? 'You have reached your current weekly workout target. Keep building consistency.'
                 : `You have ${
                     weeklyWorkoutTarget -
-                    completedWorkoutCount
+                    completedWorkoutsThisWeek
                   } workout${
                     weeklyWorkoutTarget -
-                      completedWorkoutCount ===
+                      completedWorkoutsThisWeek ===
                     1
                       ? ''
                       : 's'
                   } remaining to reach your weekly target.`}
           </p>
+
         </div>
+
       </section>
+
     </main>
   )
 }

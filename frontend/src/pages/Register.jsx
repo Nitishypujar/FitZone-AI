@@ -51,22 +51,50 @@ function Register() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          full_name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
-      })
+      const response = await fetch(
+        'http://localhost:5000/api/register',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            full_name: formData.name,
+            email: formData.email,
+            password: formData.password,
+          }),
+        }
+      )
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Registration failed.')
+        throw new Error(
+          data.message || 'Registration failed.'
+        )
+      }
+
+      // If Supabase returned a session immediately,
+      // store the authentication tokens.
+      if (data.session?.access_token) {
+        localStorage.setItem(
+          'fitzone_access_token',
+          data.session.access_token
+        )
+      }
+
+      if (data.session?.refresh_token) {
+        localStorage.setItem(
+          'fitzone_refresh_token',
+          data.session.refresh_token
+        )
+      }
+
+      if (data.user) {
+        localStorage.setItem(
+          'fitzone_user',
+          JSON.stringify(data.user)
+        )
       }
 
       navigate('/login')
@@ -103,8 +131,9 @@ function Register() {
           </h1>
 
           <p>
-            Create your FitZone AI account and get ready to track your workouts,
-            goals, progress, and personalized fitness journey.
+            Create your FitZone AI account and get ready to
+            track your workouts, goals, progress, and
+            personalized fitness journey.
           </p>
         </div>
 
@@ -115,7 +144,10 @@ function Register() {
             <p>Set up your account to get started.</p>
           </div>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
+          <form
+            className="auth-form"
+            onSubmit={handleSubmit}
+          >
             <label>
               Full name
 
@@ -168,14 +200,20 @@ function Register() {
               />
             </label>
 
-            {error && <p className="auth-error">{error}</p>}
+            {error && (
+              <p className="auth-error">
+                {error}
+              </p>
+            )}
 
             <button
               type="submit"
               className="primary-button auth-submit"
               disabled={loading}
             >
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading
+                ? 'Creating account...'
+                : 'Create Account'}
             </button>
           </form>
 
