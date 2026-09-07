@@ -8,7 +8,9 @@ const {
   generateAssistantResponse,
 } = require('./services/assistantService')
 
-
+const {
+  getProgressData,
+} = require('./services/ai/tools/progressTool')
 
 const {
   getTodayNutrition,
@@ -1484,13 +1486,35 @@ app.post('/api/assistant/chat', async (req, res) => {
   } catch (error) {
     console.error('Assistant chat error:', error)
 
+    const statusCode =
+      error?.statusCode ||
+      error?.status ||
+      error?.cause?.statusCode
+
+    const errorCode =
+      error?.error?.code ||
+      error?.cause?.error?.code
+
+    const isRateLimit =
+      statusCode === 429 ||
+      errorCode === 'too_many_requests' ||
+      errorCode === 'rate_limit_exceeded' ||
+      errorCode === 'quota_exceeded'
+
+    if (isRateLimit) {
+      return res.status(429).json({
+        status: 'error',
+        message:
+          'FitZone AI is temporarily unavailable because the AI service has reached its current request limit. Please try again later.',
+      })
+    }
+
     res.status(500).json({
       status: 'error',
       message: 'Unable to process assistant request',
     })
   }
 })
-
 // NUTRITION TARGETS API
 app.get('/api/nutrition/targets', async (req, res) => {
   const user = await authenticateUser(req, res)
@@ -2153,7 +2177,6 @@ app.get('/api/dashboard', async (req, res) => {
   })
 
 
-  
   // ============================================
   // 404 HANDLER
   // ============================================

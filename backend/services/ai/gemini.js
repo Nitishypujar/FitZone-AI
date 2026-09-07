@@ -6,21 +6,62 @@ const client = new GoogleGenAI({
 
 const GEMINI_MODEL = 'gemini-3.8-flash'
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 async function generateGeminiResponse(prompt) {
   if (!prompt || !prompt.trim()) {
     throw new Error('Gemini prompt is required')
   }
 
-  const interaction = await client.interactions.create({
-    model: GEMINI_MODEL,
-    input: prompt.trim(),
-  })
+  const maxAttempts = 3
 
-  if (!interaction.output_text) {
-    throw new Error('Gemini returned an empty response')
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const interaction = await client.interactions.create({
+        model: GEMINI_MODEL,
+        input: prompt.trim(),
+      })
+
+      if (!interaction.output_text) {
+        throw new Error('Gemini returned an empty response')
+      }
+
+      return interaction.output_text
+    } catch (error) {
+      const statusCode =
+        error?.statusCode ||
+        error?.status ||
+        error?.cause?.statusCode
+
+      const errorCode =
+        error?.error?.code ||
+        error?.cause?.error?.code
+
+      const isRateLimit =
+        statusCode === 429 ||
+        errorCode === 'too_many_requests' ||
+        errorCode === 'rate_limit_exceeded' ||
+        errorCode === 'quota_exceeded'
+
+      if (!isRateLimit || attempt === maxAttempts) {
+        throw error
+      }
+
+      const delay = Math.pow(2, attempt) * 1000
+
+      console.log(
+        `Gemini rate limit hit. Retrying in ${delay / 1000}s...`
+      )
+
+      await sleep(delay)
+    }
   }
 
-  return interaction.output_text
+  throw new Error('Gemini request failed')
 }
 
 module.exports = {

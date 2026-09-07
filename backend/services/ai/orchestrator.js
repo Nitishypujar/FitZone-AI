@@ -14,6 +14,9 @@ const {
     getWorkoutData,
   } = require('./tools/workoutTool')
   
+  const {
+    getProgressData,
+  } = require('./tools/progressTool')
   
   async function orchestrateAssistantRequest({
     question,
@@ -73,7 +76,13 @@ const {
         userId
       )
     }
-  
+    
+    if (intent === 'progress') {
+        toolResult = await getProgressData(
+          supabase,
+          userId
+        )
+      }
     // -----------------------------------------
     // 4. Return orchestration result
     // -----------------------------------------
