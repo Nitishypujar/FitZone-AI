@@ -15,6 +15,10 @@ const {
   } = require('./tools/workoutTool')
   
   const {
+    getGoalData,
+  } = require('./tools/goalTool')
+
+  const {
     getProgressData,
   } = require('./tools/progressTool')
   
@@ -83,6 +87,15 @@ const {
           userId
         )
       }
+
+    if (intent === 'goals') {
+       toolResult = await getGoalData(
+         supabase,
+         userId
+       )
+      }
+
+    
     // -----------------------------------------
     // 4. Return orchestration result
     // -----------------------------------------
