@@ -8,6 +8,11 @@ const {
   generateAssistantResponse,
 } = require('./services/assistantService')
 
+const {
+  validateModelFile,
+  prepareFeatures
+} = require("./services/ml/activityProfileService");
+
 // ADAPTIVE RECOMMENDATION ENGINE
 const {
   generateAdaptiveRecommendation,
@@ -2269,7 +2274,42 @@ app.get('/api/dashboard', async (req, res) => {
     }
   })
 
+  app.get("/api/activity-profile/model-status", (req, res) => {
+    try {
+      const model = validateModelFile();
   
+      res.json({
+        status: "success",
+        model: {
+          name: "FitZone Activity Level Model",
+          runtime: "ONNX",
+          available: model.available,
+          size_bytes: model.size_bytes
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        status: "error",
+        message: error.message
+      });
+    }
+  });
+  
+  app.post("/api/activity-profile/features", authenticateUser, (req, res) => {
+    try {
+      const features = prepareFeatures(req.body);
+  
+      res.json({
+        status: "success",
+        features
+      });
+    } catch (error) {
+      res.status(400).json({
+        status: "error",
+        message: error.message
+      });
+    }
+  });
   
   // ============================================
   // 404 HANDLER
