@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react'
 import './Profile.css'
+
+const API_BASE = 'http://localhost:5000'
+
 function Profile() {
   const [profile, setProfile] = useState({
     full_name: '',
     age: '',
     height_cm: '',
     weight_kg: '',
-    fitness_level: '',
-    primary_goal: '',
+    fitness_level: 'Beginner',
+    primary_goal: 'Lose Weight',
     workout_days_per_week: '',
     preferred_workout_duration: '',
   })
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+
+  const token = localStorage.getItem(
+    'fitzone_access_token'
+  )
 
   useEffect(() => {
     fetchProfile()
@@ -23,124 +30,189 @@ function Profile() {
 
   async function fetchProfile() {
     try {
-      const token = localStorage.getItem('fitzone_access_token')
+      setLoading(true)
+      setError('')
 
       if (!token) {
-        setError('Please sign in to view your profile.')
-        setLoading(false)
+        setError('Please log in again.')
         return
       }
 
-      const response = await fetch('http://localhost:5000/api/profile', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await fetch(
+        `${API_BASE}/api/profile`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to load profile.')
+        throw new Error(
+          data.message ||
+            'Failed to load profile'
+        )
       }
 
+      const p =
+        data.profile ||
+        data.data ||
+        data
+
       setProfile({
-        full_name: data.profile.full_name || '',
-        age: data.profile.age || '',
-        height_cm: data.profile.height_cm || '',
-        weight_kg: data.profile.weight_kg || '',
-        fitness_level: data.profile.fitness_level || '',
-        primary_goal: data.profile.primary_goal || '',
+        full_name: p.full_name ?? '',
+        age: p.age ?? '',
+        height_cm: p.height_cm ?? '',
+        weight_kg: p.weight_kg ?? '',
+        fitness_level:
+          p.fitness_level ||
+          'Beginner',
+        primary_goal:
+          p.primary_goal ||
+          'Lose Weight',
         workout_days_per_week:
-          data.profile.workout_days_per_week || '',
+          p.workout_days_per_week ?? '',
         preferred_workout_duration:
-          data.profile.preferred_workout_duration || '',
+          p.preferred_workout_duration ?? '',
       })
-    } catch (error) {
-      console.error('Profile loading error:', error)
-      setError(error.message || 'Unable to load your profile.')
+    } catch (err) {
+      console.error(
+        'Profile fetch error:',
+        err
+      )
+
+      setError(
+        err.message ||
+          'Failed to load profile'
+      )
     } finally {
       setLoading(false)
     }
   }
 
   function handleChange(event) {
-    const { name, value } = event.target
+    const {
+      name,
+      value,
+    } = event.target
 
     setProfile((previous) => ({
       ...previous,
       [name]: value,
     }))
-
-    setSuccess('')
-    setError('')
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault()
-
-    setError('')
-    setSuccess('')
-
-    const token = localStorage.getItem('fitzone_access_token')
-
-    if (!token) {
-      setError('Please sign in again.')
-      return
+  function numberOrNull(value) {
+    if (
+      value === '' ||
+      value === null ||
+      value === undefined
+    ) {
+      return null
     }
 
-    setSaving(true)
+    const number = Number(value)
+
+    return Number.isFinite(number)
+      ? number
+      : null
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault()
 
     try {
-      const response = await fetch('http://localhost:5000/api/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          full_name: profile.full_name,
-          age: profile.age ? Number(profile.age) : null,
-          height_cm: profile.height_cm
-            ? Number(profile.height_cm)
-            : null,
-          weight_kg: profile.weight_kg
-            ? Number(profile.weight_kg)
-            : null,
-          fitness_level: profile.fitness_level,
-          primary_goal: profile.primary_goal,
-          workout_days_per_week: profile.workout_days_per_week
-            ? Number(profile.workout_days_per_week)
-            : null,
-          preferred_workout_duration:
-            profile.preferred_workout_duration
-              ? Number(profile.preferred_workout_duration)
-              : null,
-        }),
-      })
+      setSaving(true)
+      setMessage('')
+      setError('')
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Unable to update profile.')
+      if (!token) {
+        setError('Please log in again.')
+        return
       }
 
-      setProfile({
-        full_name: data.profile.full_name || '',
-        age: data.profile.age || '',
-        height_cm: data.profile.height_cm || '',
-        weight_kg: data.profile.weight_kg || '',
-        fitness_level: data.profile.fitness_level || '',
-        primary_goal: data.profile.primary_goal || '',
-        workout_days_per_week:
-          data.profile.workout_days_per_week || '',
-        preferred_workout_duration:
-          data.profile.preferred_workout_duration || '',
-      })
+      const body = {
+        full_name:
+          profile.full_name.trim() ||
+          null,
 
-      setSuccess('Profile updated successfully.')
-    } catch (error) {
-      console.error('Profile update error:', error)
-      setError(error.message || 'Unable to update your profile.')
+        age: numberOrNull(
+          profile.age
+        ),
+
+        height_cm:
+          numberOrNull(
+            profile.height_cm
+          ),
+
+        weight_kg:
+          numberOrNull(
+            profile.weight_kg
+          ),
+
+        fitness_level:
+          profile.fitness_level ||
+          null,
+
+        primary_goal:
+          profile.primary_goal ||
+          null,
+
+        workout_days_per_week:
+          numberOrNull(
+            profile.workout_days_per_week
+          ),
+
+        preferred_workout_duration:
+          numberOrNull(
+            profile.preferred_workout_duration
+          ),
+      }
+
+      const response = await fetch(
+        `${API_BASE}/api/profile`,
+        {
+          method: 'PUT',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          body: JSON.stringify(body),
+        }
+      )
+
+      const data =
+        await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Failed to save profile'
+        )
+      }
+
+      setMessage(
+        'Profile saved successfully.'
+      )
+
+      await fetchProfile()
+    } catch (err) {
+      console.error(
+        'Profile save error:',
+        err
+      )
+
+      setError(
+        err.message ||
+          'Failed to save profile'
+      )
     } finally {
       setSaving(false)
     }
@@ -148,203 +220,267 @@ function Profile() {
 
   if (loading) {
     return (
-      <main className="dashboard-page">
-        <section className="dashboard-section">
-          <p>Loading your profile...</p>
-        </section>
-      </main>
+      <div className="page">
+        <div className="card">
+          <p>
+            Loading profile...
+          </p>
+        </div>
+      </div>
     )
   }
 
   return (
-    <main className="dashboard-page">
-      <section className="dashboard-section">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">YOUR ACCOUNT</p>
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Profile</h1>
 
-            <h1>My Profile</h1>
-
-            <p>
-              Keep your fitness information updated so FitZone AI can
-              personalize your experience.
-            </p>
-          </div>
+          <p>
+            Manage your fitness profile
+            and personalization data.
+          </p>
         </div>
+      </div>
 
-        <form className="profile-card" onSubmit={handleSubmit}>
-          <div className="profile-card-header">
+      {message && (
+        <div className="alert success">
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="alert error">
+          {error}
+        </div>
+      )}
+
+      <form
+        className="profile-form"
+        onSubmit={saveProfile}
+      >
+        <section className="card">
+          <div className="card-header">
             <div>
-              <h2>Personal information</h2>
+              <h2>
+                Personal Information
+              </h2>
 
               <p>
-                Your profile will be used for personalized workouts,
-                goals, progress tracking, and AI recommendations.
+                Your basic information
+                used to personalize
+                FitZone.
               </p>
             </div>
           </div>
 
-          <div className="profile-form-grid">
-            <label>
-              Full name
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="full_name">
+                Full Name
+              </label>
 
               <input
-                type="text"
+                id="full_name"
                 name="full_name"
-                value={profile.full_name}
-                onChange={handleChange}
-                placeholder="Your full name"
+                type="text"
+                value={
+                  profile.full_name
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="Enter your name"
               />
-            </label>
+            </div>
 
-            <label>
-              Age
+            <div className="form-group">
+              <label htmlFor="age">
+                Age
+              </label>
 
               <input
-                type="number"
+                id="age"
                 name="age"
-                value={profile.age}
-                onChange={handleChange}
-                placeholder="e.g. 21"
+                type="number"
                 min="13"
                 max="100"
+                value={profile.age}
+                onChange={
+                  handleChange
+                }
+                placeholder="Age"
               />
-            </label>
+            </div>
 
-            <label>
-              Height (cm)
+            <div className="form-group">
+              <label htmlFor="height_cm">
+                Height (cm)
+              </label>
 
               <input
-                type="number"
+                id="height_cm"
                 name="height_cm"
-                value={profile.height_cm}
-                onChange={handleChange}
-                placeholder="e.g. 175"
-                min="100"
+                type="number"
+                min="50"
                 max="250"
                 step="0.1"
+                value={
+                  profile.height_cm
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="Height"
               />
-            </label>
+            </div>
 
-            <label>
-              Weight (kg)
+            <div className="form-group">
+              <label htmlFor="weight_kg">
+                Weight (kg)
+              </label>
 
               <input
-                type="number"
+                id="weight_kg"
                 name="weight_kg"
-                value={profile.weight_kg}
-                onChange={handleChange}
-                placeholder="e.g. 70"
+                type="number"
                 min="20"
                 max="300"
                 step="0.1"
+                value={
+                  profile.weight_kg
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="Weight"
               />
-            </label>
+            </div>
 
-            <label>
-              Fitness level
+            <div className="form-group">
+              <label htmlFor="fitness_level">
+                Fitness Level
+              </label>
 
               <select
+                id="fitness_level"
                 name="fitness_level"
-                value={profile.fitness_level}
-                onChange={handleChange}
+                value={
+                  profile.fitness_level
+                }
+                onChange={
+                  handleChange
+                }
               >
-                <option value="">Select your level</option>
-                <option value="Beginner">Beginner</option>
-                <option value="Intermediate">Intermediate</option>
-                <option value="Advanced">Advanced</option>
-              </select>
-            </label>
+                <option value="Beginner">
+                  Beginner
+                </option>
 
-            <label>
-              Primary goal
+                <option value="Intermediate">
+                  Intermediate
+                </option>
+
+                <option value="Advanced">
+                  Advanced
+                </option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="primary_goal">
+                Primary Goal
+              </label>
 
               <select
+                id="primary_goal"
                 name="primary_goal"
-                value={profile.primary_goal}
-                onChange={handleChange}
+                value={
+                  profile.primary_goal
+                }
+                onChange={
+                  handleChange
+                }
               >
-                <option value="">Select your goal</option>
-                <option value="Build Muscle">Build Muscle</option>
-                <option value="Lose Weight">Lose Weight</option>
+                <option value="Lose Weight">
+                  Lose Weight
+                </option>
+
+                <option value="Build Muscle">
+                  Build Muscle
+                </option>
+
                 <option value="Improve Fitness">
                   Improve Fitness
                 </option>
-                <option value="Increase Strength">
-                  Increase Strength
+
+                <option value="Maintain Weight">
+                  Maintain Weight
                 </option>
+
                 <option value="Improve Endurance">
                   Improve Endurance
                 </option>
-                <option value="General Wellness">
-                  General Wellness
-                </option>
               </select>
-            </label>
+            </div>
 
-            <label>
-              Workout days per week
+            <div className="form-group">
+              <label htmlFor="workout_days_per_week">
+                Workout Days / Week
+              </label>
 
-              <select
+              <input
+                id="workout_days_per_week"
                 name="workout_days_per_week"
-                value={profile.workout_days_per_week}
-                onChange={handleChange}
-              >
-                <option value="">Select days</option>
-                <option value="1">1 day</option>
-                <option value="2">2 days</option>
-                <option value="3">3 days</option>
-                <option value="4">4 days</option>
-                <option value="5">5 days</option>
-                <option value="6">6 days</option>
-                <option value="7">7 days</option>
-              </select>
-            </label>
+                type="number"
+                min="0"
+                max="7"
+                value={
+                  profile.workout_days_per_week
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="4"
+              />
+            </div>
 
-            <label>
-              Preferred workout duration
+            <div className="form-group">
+              <label htmlFor="preferred_workout_duration">
+                Preferred Workout
+                Duration (min)
+              </label>
 
-              <select
+              <input
+                id="preferred_workout_duration"
                 name="preferred_workout_duration"
-                value={profile.preferred_workout_duration}
-                onChange={handleChange}
-              >
-                <option value="">Select duration</option>
-                <option value="20">20 minutes</option>
-                <option value="30">30 minutes</option>
-                <option value="45">45 minutes</option>
-                <option value="60">60 minutes</option>
-                <option value="90">90 minutes</option>
-              </select>
-            </label>
+                type="number"
+                min="5"
+                max="300"
+                value={
+                  profile.preferred_workout_duration
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="30"
+              />
+            </div>
           </div>
+        </section>
 
-          {error && <p className="auth-error">{error}</p>}
-
-          {success && <p className="profile-success">{success}</p>}
-
-          <div className="profile-actions">
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={saving}
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-
-        <div className="profile-note">
-          <strong>Why this matters</strong>
-
-          <p>
-            The information in your profile will eventually power
-            FitZone AI's personalized workout plans, progress insights,
-            nutrition guidance, and fitness assistant.
-          </p>
+        <div className="profile-actions">
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={saving}
+          >
+            {saving
+              ? 'Saving...'
+              : 'Save Profile'}
+          </button>
         </div>
-      </section>
-    </main>
+      </form>
+    </div>
   )
 }
 

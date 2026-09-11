@@ -8,11 +8,13 @@ async function createRecommendationEvent(supabase, userId, recommendationData) {
     }
   
     const {
-      recommendation_type,
-      recommendation,
-      reason
-    } = recommendationData;
-  
+        recommendation_type,
+        recommendation_action,
+        recommendation,
+        reason,
+        context_snapshot
+      } = recommendationData;
+      
     if (!recommendation_type || !recommendation) {
       throw new Error("Recommendation type and recommendation are required");
     }
@@ -22,8 +24,11 @@ async function createRecommendationEvent(supabase, userId, recommendationData) {
       .insert({
         user_id: userId,
         recommendation_type,
+        recommendation_action:
+          recommendation_action || recommendation_type,
         recommendation,
-        reason: reason || null
+        reason: reason || null,
+        context_snapshot: context_snapshot || null
       })
       .select()
       .single();

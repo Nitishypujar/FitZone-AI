@@ -8,6 +8,7 @@ function Dashboard() {
   const [workouts, setWorkouts] = useState([])
   const [recommendation, setRecommendation] = useState(null)
   const [recommendationEventId, setRecommendationEventId] = useState(null)
+  const [intelligence, setIntelligence] = useState(null)
 
   const [loading, setLoading] = useState(true)
   const [recommendationUpdating, setRecommendationUpdating] = useState(false)
@@ -32,10 +33,17 @@ function Dashboard() {
 
       const [
         dashboardResponse,
+        intelligenceResponse,
         workoutsResponse,
         recommendationResponse,
       ] = await Promise.all([
         fetch('http://localhost:5000/api/dashboard/summary', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+
+        fetch('http://localhost:5000/api/intelligence/snapshot', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -55,6 +63,7 @@ function Dashboard() {
       ])
 
       const dashboardData = await dashboardResponse.json()
+      const intelligenceData = await intelligenceResponse.json()
       const workoutsData = await workoutsResponse.json()
       const recommendationData =
         await recommendationResponse.json()
@@ -63,6 +72,13 @@ function Dashboard() {
         throw new Error(
           dashboardData.message ||
             'Unable to load dashboard data.'
+        )
+      }
+
+      if (!intelligenceResponse.ok) {
+        throw new Error(
+          intelligenceData.message ||
+            'Unable to load fitness intelligence.'
         )
       }
 
@@ -81,7 +97,14 @@ function Dashboard() {
       }
 
       setDashboard(dashboardData)
-      setWorkouts(workoutsData.workouts || [])
+
+      setIntelligence(
+        intelligenceData.data || null
+      )
+
+      setWorkouts(
+        workoutsData.workouts || []
+      )
 
       setRecommendation(
         recommendationData.recommendation || null
@@ -448,6 +471,7 @@ function Dashboard() {
   }
 
   const nextAction =
+    intelligence?.next_best_action ||
     recommendation?.next_action
 
   const eventStatus =
@@ -466,6 +490,11 @@ function Dashboard() {
           letter.toUpperCase()
         )
     : 'Recommendation unavailable'
+
+  const actionScore =
+    nextAction?.score ??
+    recommendation?.score ??
+    null
 
   return (
     <main className="dashboard-page">
@@ -660,8 +689,10 @@ function Dashboard() {
                   </strong>
 
                   <span>
-                    Priority:{' '}
-                    {nextAction.priority}
+                    Score:{' '}
+                    {actionScore !== null
+                      ? actionScore
+                      : '—'}
                   </span>
                 </div>
 

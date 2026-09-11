@@ -1,25 +1,40 @@
 function buildFitZoneActivityFeatures(userState = {}, context = {}) {
-  const profile = context.profile || {};
-  const workoutSummary = context.workout_summary || {};
-
-  const plannedDays = Number(profile.workout_days_per_week || 0);
-  const completedWorkouts = Number(workoutSummary.completed_workouts || 0);
-  const activeMinutes = Number(workoutSummary.total_active_minutes || 0);
-  const duration = Number(profile.preferred_workout_duration || 0);
+  const profile = context.profile || {}
 
   return {
     age: Number(profile.age || 0),
-    workout_days_per_week: plannedDays,
-    preferred_workout_duration: duration,
-    completed_workouts: completedWorkouts,
-    total_active_minutes: activeMinutes,
-    workout_adherence: Number(userState.workout_adherence || 0),
-    recent_training_load: Number(userState.recent_training_load || 0),
-    fitness_level: profile.fitness_level || null,
-    primary_goal: profile.primary_goal || null
-  };
+
+    sex: Number(profile.sex || 0),
+
+    race_ethnicity:
+      Number(profile.race_ethnicity || 0),
+
+    education:
+      Number(profile.education || 0),
+
+    marital_status:
+      Number(profile.marital_status || 0),
+
+    income_poverty_ratio:
+      Number(profile.income_poverty_ratio || 0),
+
+    vigorous_activity_days:
+      Number(profile.vigorous_activity_days || 0),
+
+    moderate_activity_days:
+      Number(profile.moderate_activity_days || 0),
+
+    vigorous_minutes_week:
+      Number(profile.vigorous_minutes_week || 0),
+
+    moderate_minutes_week:
+      Number(profile.moderate_minutes_week || 0),
+
+    sedentary_minutes_day:
+      Number(profile.sedentary_minutes_day || 0),
+  }
 }
 
 module.exports = {
-  buildFitZoneActivityFeatures
-};
+  buildFitZoneActivityFeatures,
+}
