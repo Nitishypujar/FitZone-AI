@@ -1,3 +1,4 @@
+const activityProfileRouter = require("./services/ml/activityProfileRouter");
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
@@ -7,6 +8,12 @@ const { buildFitnessContext } = require('./services/fitnessContext')
 const {
   generateAssistantResponse,
 } = require('./services/assistantService')
+
+const {
+  createRecommendationEvent,
+  updateRecommendationEvent,
+  getRecommendationEvents,
+} = require('./services/recommendationEvents')
 
 const {
   validateModelFile,
@@ -31,6 +38,7 @@ const { generateWorkout } = require('./services/workoutGenerator')
 
 const { buildUserState } = require('./services/userState')
 const app = express()
+app.locals.supabase = supabase;
 
 const PORT = process.env.PORT || 5000
 
@@ -1502,7 +1510,10 @@ app.get('/api/user-state', async (req, res) => {
   }
 })
 
+// ============================================
 // ADAPTIVE RECOMMENDATION API
+// ============================================
+
 app.get('/api/recommendation', async (req, res) => {
   const user = await authenticateUser(req, res)
 
@@ -1514,7 +1525,6 @@ app.get('/api/recommendation', async (req, res) => {
       user.id
     )
 
-    // Calculate personalized nutrition targets
     const nutritionTargets =
       calculateNutritionTargets(context.profile)
 
@@ -1531,9 +1541,142 @@ app.get('/api/recommendation', async (req, res) => {
     const recommendation =
       generateAdaptiveRecommendation(state)
 
-    res.json({
+    const latestEventResult = await supabase
+      .from('recommendation_events')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('generated_at', {
+        ascending: false,
+      })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestEventResult.error) {
+      throw new Error(
+        latestEventResult.error.message
+      )
+    }
+
+    const latestEvent =
+      latestEventResult.data
+
+    /*
+     * Reuse the latest event when it represents
+     * the same current recommendation and has
+     * already been interacted with.
+     */
+    if (
+      latestEvent &&
+      latestEvent.recommendation_type ===
+        recommendation.next_action.action &&
+      latestEvent.recommendation ===
+        recommendation.next_action.reason &&
+      (
+        latestEvent.accepted !== null ||
+        latestEvent.completed === true
+      )
+    ) {
+      return res.json({
+        status: 'success',
+        recommendation: {
+          ...recommendation,
+          event_status: latestEvent,
+        },
+        event_id: latestEvent.id,
+      })
+    }
+
+    /*
+     * If the latest event is still completely
+     * untouched, reuse it instead of inserting
+     * another duplicate.
+     */
+    if (
+      latestEvent &&
+      latestEvent.recommendation_type ===
+        recommendation.next_action.action &&
+      latestEvent.recommendation ===
+        recommendation.next_action.reason &&
+      latestEvent.accepted === null &&
+      latestEvent.completed === null
+    ) {
+      return res.json({
+        status: 'success',
+        recommendation: {
+          ...recommendation,
+          event_status: latestEvent,
+        },
+        event_id: latestEvent.id,
+      })
+    }
+
+    let event
+
+    try {
+      event = await createRecommendationEvent(
+        supabase,
+        user.id,
+        {
+          recommendation_type:
+            recommendation.next_action.action,
+    
+          recommendation:
+            recommendation.next_action.reason,
+    
+          reason:
+            recommendation.next_action.reason,
+        }
+      )
+    } catch (insertError) {
+      if (
+        insertError.message &&
+        insertError.message.includes(
+          'recommendation_events_pending_unique_idx'
+        )
+      ) {
+        const existingEventResult = await supabase
+          .from('recommendation_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq(
+            'recommendation_type',
+            recommendation.next_action.action
+          )
+          .eq(
+            'recommendation',
+            recommendation.next_action.reason
+          )
+          .is('accepted', null)
+          .is('completed', null)
+          .maybeSingle()
+    
+        if (existingEventResult.error) {
+          throw new Error(
+            existingEventResult.error.message
+          )
+        }
+    
+        event = existingEventResult.data
+      } else {
+        throw insertError
+      }
+    }
+    
+    if (!event) {
+      throw new Error(
+        'Unable to create or recover recommendation event'
+      )
+    }
+
+    return res.json({
       status: 'success',
-      recommendation,
+
+      recommendation: {
+        ...recommendation,
+        event_status: event,
+      },
+
+      event_id: event.id,
     })
   } catch (error) {
     console.error(
@@ -1541,13 +1684,82 @@ app.get('/api/recommendation', async (req, res) => {
       error
     )
 
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message:
         'Unable to generate adaptive recommendation',
     })
   }
 })
+
+// ============================================
+// RECOMMENDATION EVENT UPDATE API
+// ============================================
+
+app.put('/api/recommendation/events/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const event = await updateRecommendationEvent(
+      supabase,
+      user.id,
+      req.params.id,
+      req.body
+    )
+
+    res.json({
+      status: 'success',
+      event,
+    })
+  } catch (error) {
+    console.error(
+      'Recommendation event update error:',
+      error
+    )
+
+    res.status(400).json({
+      status: 'error',
+      message: error.message,
+    })
+  }
+})
+
+// ============================================
+// RECOMMENDATION EVENTS API - GET
+// ============================================
+
+app.get('/api/recommendation/events', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const events = await getRecommendationEvents(
+      supabase,
+      user.id,
+      req.query.limit
+    )
+
+    res.json({
+      status: 'success',
+      events,
+    })
+  } catch (error) {
+    console.error(
+      'Recommendation events fetch error:',
+      error
+    )
+
+    res.status(500).json({
+      status: 'error',
+      message:
+        'Unable to fetch recommendation events',
+    })
+  }
+})
+
 // FITNESS AI CHAT API
 app.post('/api/assistant/chat', async (req, res) => {
   const user = await authenticateUser(req, res)
@@ -1603,8 +1815,7 @@ app.post('/api/assistant/chat', async (req, res) => {
       return res.status(429).json({
         status: 'error',
         message:
-          'FitZone AI is temporarily unavailable because the AI service has reached its current request limit. Please try again later.',
-      })
+         'FitZone AI is temporarily unavailable because the AI service has reached its current request limit. Please try again later.',})
     }
 
     res.status(500).json({
@@ -2311,6 +2522,8 @@ app.get('/api/dashboard', async (req, res) => {
     }
   });
   
+  
+app.use("/api/activity-profile", activityProfileRouter);
   // ============================================
   // 404 HANDLER
   // ============================================

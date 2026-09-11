@@ -6,8 +6,13 @@ function Dashboard() {
 
   const [dashboard, setDashboard] = useState(null)
   const [workouts, setWorkouts] = useState([])
+  const [recommendation, setRecommendation] = useState(null)
+  const [recommendationEventId, setRecommendationEventId] = useState(null)
+
   const [loading, setLoading] = useState(true)
+  const [recommendationUpdating, setRecommendationUpdating] = useState(false)
   const [error, setError] = useState('')
+  const [recommendationError, setRecommendationError] = useState('')
 
   const token = localStorage.getItem('fitzone_access_token')
 
@@ -19,18 +24,30 @@ function Dashboard() {
     try {
       setLoading(true)
       setError('')
+      setRecommendationError('')
 
       if (!token) {
         throw new Error('Please log in to view your dashboard.')
       }
 
-      const [dashboardResponse, workoutsResponse] = await Promise.all([
+      const [
+        dashboardResponse,
+        workoutsResponse,
+        recommendationResponse,
+      ] = await Promise.all([
         fetch('http://localhost:5000/api/dashboard/summary', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }),
+
         fetch('http://localhost:5000/api/workouts', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+
+        fetch('http://localhost:5000/api/recommendation', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -39,26 +56,115 @@ function Dashboard() {
 
       const dashboardData = await dashboardResponse.json()
       const workoutsData = await workoutsResponse.json()
+      const recommendationData =
+        await recommendationResponse.json()
 
       if (!dashboardResponse.ok) {
         throw new Error(
-          dashboardData.message || 'Unable to load dashboard data.'
+          dashboardData.message ||
+            'Unable to load dashboard data.'
         )
       }
 
       if (!workoutsResponse.ok) {
         throw new Error(
-          workoutsData.message || 'Unable to load workouts.'
+          workoutsData.message ||
+            'Unable to load workouts.'
+        )
+      }
+
+      if (!recommendationResponse.ok) {
+        throw new Error(
+          recommendationData.message ||
+            'Unable to load AI recommendation.'
         )
       }
 
       setDashboard(dashboardData)
       setWorkouts(workoutsData.workouts || [])
+
+      setRecommendation(
+        recommendationData.recommendation || null
+      )
+
+      setRecommendationEventId(
+        recommendationData.event_id || null
+      )
     } catch (error) {
-      console.error('Dashboard loading error:', error)
-      setError(error.message || 'Unable to load dashboard.')
+      console.error(
+        'Dashboard loading error:',
+        error
+      )
+
+      setError(
+        error.message ||
+          'Unable to load dashboard.'
+      )
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function updateRecommendation(updates) {
+    if (!recommendationEventId || !token) {
+      setRecommendationError(
+        'Recommendation session is unavailable.'
+      )
+      return
+    }
+
+    try {
+      setRecommendationUpdating(true)
+      setRecommendationError('')
+
+      const response = await fetch(
+        `http://localhost:5000/api/recommendation/events/${recommendationEventId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updates),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Unable to update recommendation.'
+        )
+      }
+
+      const updatedEvent = data.event || {}
+
+      setRecommendation((current) => ({
+        ...(current || {}),
+        event_status: {
+          ...(current?.event_status || {}),
+          ...updatedEvent,
+          ...updates,
+        },
+      }))
+
+      console.log(
+        'Recommendation event updated:',
+        updatedEvent
+      )
+    } catch (error) {
+      console.error(
+        'Recommendation update error:',
+        error
+      )
+
+      setRecommendationError(
+        error.message ||
+          'Unable to update recommendation.'
+      )
+    } finally {
+      setRecommendationUpdating(false)
     }
   }
 
@@ -67,13 +173,19 @@ function Dashboard() {
       <main className="dashboard-page">
         <section className="dashboard-header">
           <div>
-            <p className="eyebrow">FITZONE AI DASHBOARD</p>
+            <p className="eyebrow">
+              FITZONE AI DASHBOARD
+            </p>
+
             <h1>
               Loading your
               <br />
               <span>fitness dashboard.</span>
             </h1>
-            <p>Getting your latest fitness data...</p>
+
+            <p>
+              Getting your latest fitness data...
+            </p>
           </div>
         </section>
       </main>
@@ -85,16 +197,23 @@ function Dashboard() {
       <main className="dashboard-page">
         <section className="dashboard-header">
           <div>
-            <p className="eyebrow">FITZONE AI DASHBOARD</p>
+            <p className="eyebrow">
+              FITZONE AI DASHBOARD
+            </p>
+
             <h1>
               Something went
               <br />
               <span>wrong.</span>
             </h1>
+
             <p>{error}</p>
           </div>
 
-          <button className="primary-button" onClick={loadDashboard}>
+          <button
+            className="primary-button"
+            onClick={loadDashboard}
+          >
             Try Again
           </button>
         </section>
@@ -102,7 +221,10 @@ function Dashboard() {
     )
   }
 
-  const summary = dashboard?.summary || dashboard || {}
+  const summary =
+    dashboard?.summary ||
+    dashboard ||
+    {}
 
   const weeklyWorkouts = Number(
     summary.weekly_completed_workouts ??
@@ -135,28 +257,25 @@ function Dashboard() {
       0
   )
 
-  const totalExercisesCompleted = Number(
-    summary.total_exercises_completed ??
-      summary.completed_exercises ??
-      0
-  )
-
-  const totalActiveMinutes = Number(
-    summary.total_active_minutes ??
-      summary.active_minutes ??
-      0
-  )
-
   const weeklyWorkoutPercentage =
     weeklyWorkoutTarget > 0
-      ? Math.min(Math.round((weeklyWorkouts / weeklyWorkoutTarget) * 100), 100)
+      ? Math.min(
+          Math.round(
+            (weeklyWorkouts /
+              weeklyWorkoutTarget) *
+              100
+          ),
+          100
+        )
       : 0
 
   const weeklyMinutesPercentage =
     weeklyActiveMinuteTarget > 0
       ? Math.min(
           Math.round(
-            (weeklyActiveMinutes / weeklyActiveMinuteTarget) * 100
+            (weeklyActiveMinutes /
+              weeklyActiveMinuteTarget) *
+              100
           ),
           100
         )
@@ -165,87 +284,138 @@ function Dashboard() {
   const consistency =
     weeklyWorkoutTarget > 0
       ? Math.min(
-          Math.round((weeklyWorkouts / weeklyWorkoutTarget) * 100),
+          Math.round(
+            (weeklyWorkouts /
+              weeklyWorkoutTarget) *
+              100
+          ),
           100
         )
       : 0
 
   const weeklyScore = Math.round(
-    (weeklyWorkoutPercentage + weeklyMinutesPercentage) / 2
+    (weeklyWorkoutPercentage +
+      weeklyMinutesPercentage) /
+      2
   )
 
-  const today = new Date().toISOString().split('T')[0]
+  const today =
+    new Date()
+      .toISOString()
+      .split('T')[0]
 
   const todaysWorkout =
-  workouts.find(
-    (workout) =>
-      workout.scheduled_date === today &&
-      !workout.completed &&
-      Array.isArray(workout.exercises) &&
-      workout.exercises.length > 0
-  ) ||
-  workouts.find(
-    (workout) =>
-      !workout.completed &&
-      Array.isArray(workout.exercises) &&
-      workout.exercises.length > 0
-  ) ||
-  workouts.find(
-    (workout) =>
-      Array.isArray(workout.exercises) &&
-      workout.exercises.length > 0
-  ) ||
-  null
+    workouts.find(
+      (workout) =>
+        workout.scheduled_date === today &&
+        !workout.completed &&
+        Array.isArray(workout.exercises) &&
+        workout.exercises.length > 0
+    ) ||
+    workouts.find(
+      (workout) =>
+        !workout.completed &&
+        Array.isArray(workout.exercises) &&
+        workout.exercises.length > 0
+    ) ||
+    workouts.find(
+      (workout) =>
+        Array.isArray(workout.exercises) &&
+        workout.exercises.length > 0
+    ) ||
+    null
 
-  const exercises = todaysWorkout?.exercises || []
+  const exercises =
+    todaysWorkout?.exercises || []
 
   const workoutIntensity =
     todaysWorkout?.difficulty
-      ? todaysWorkout.difficulty.charAt(0).toUpperCase() +
+      ? todaysWorkout.difficulty
+          .charAt(0)
+          .toUpperCase() +
         todaysWorkout.difficulty.slice(1)
       : 'Moderate'
 
-  const remainingWorkouts = Math.max(
-    weeklyWorkoutTarget - weeklyWorkouts,
-    0
-  )
+  const remainingWorkouts =
+    Math.max(
+      weeklyWorkoutTarget -
+        weeklyWorkouts,
+      0
+    )
 
   const insight =
-    weeklyWorkouts >= weeklyWorkoutTarget
+    weeklyWorkouts >=
+    weeklyWorkoutTarget
       ? 'You have reached your weekly workout target. Great consistency — keep building on it.'
       : remainingWorkouts === 1
         ? 'You are one workout away from completing your weekly target. Keep the momentum going.'
         : `You have ${remainingWorkouts} workouts remaining to reach your weekly target.`
 
-  const activityDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+  const activityDays = [
+    'MON',
+    'TUE',
+    'WED',
+    'THU',
+    'FRI',
+    'SAT',
+    'SUN',
+  ]
 
   function getDayDate(dayIndex) {
     const currentDate = new Date()
-    const currentDay = currentDate.getDay()
+    const currentDay =
+      currentDate.getDay()
 
-    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+    const mondayOffset =
+      currentDay === 0
+        ? -6
+        : 1 - currentDay
 
-    const monday = new Date(currentDate)
-    monday.setDate(currentDate.getDate() + mondayOffset)
+    const monday =
+      new Date(currentDate)
 
-    const date = new Date(monday)
-    date.setDate(monday.getDate() + dayIndex)
+    monday.setDate(
+      currentDate.getDate() +
+        mondayOffset
+    )
 
-    return date.toISOString().split('T')[0]
+    const date =
+      new Date(monday)
+
+    date.setDate(
+      monday.getDate() +
+        dayIndex
+    )
+
+    return date
+      .toISOString()
+      .split('T')[0]
   }
 
   function getActivityForDay(dayIndex) {
-    const date = getDayDate(dayIndex)
+    const date =
+      getDayDate(dayIndex)
 
-    const completedWorkout = workouts.find((workout) => {
-      const completionDate = workout.completed_at
-        ? workout.completed_at.split('T')[0]
-        : workout.updated_at
-          ? workout.updated_at.split('T')[0]
-          : workout.scheduled_date
+    const completedWorkout =
+      workouts.find(
+        (workout) => {
+          const completionDate =
+            workout.completed_at
+              ? workout.completed_at.split(
+                  'T'
+                )[0]
+              : workout.updated_at
+                ? workout.updated_at.split(
+                    'T'
+                  )[0]
+                : workout.scheduled_date
 
-      return workout.completed && completionDate === date
-    })
+          return (
+            workout.completed &&
+            completionDate === date
+          )
+        }
+      )
 
     if (!completedWorkout) {
       return {
@@ -254,12 +424,22 @@ function Dashboard() {
       }
     }
 
-    const duration = Number(completedWorkout.duration_minutes || 30)
+    const duration =
+      Number(
+        completedWorkout.duration_minutes ||
+          30
+      )
 
-    const height = Math.min(
-      Math.max(Math.round((duration / 60) * 100), 25),
-      100
-    )
+    const height =
+      Math.min(
+        Math.max(
+          Math.round(
+            (duration / 60) * 100
+          ),
+          25
+        ),
+        100
+      )
 
     return {
       completed: true,
@@ -267,25 +447,55 @@ function Dashboard() {
     }
   }
 
+  const nextAction =
+    recommendation?.next_action
+
+  const eventStatus =
+    recommendation?.event_status || {}
+
+  const accepted =
+    eventStatus.accepted
+
+  const completed =
+    eventStatus.completed
+
+  const actionLabel = nextAction?.action
+    ? nextAction.action
+        .replaceAll('-', ' ')
+        .replace(/\b\w/g, (letter) =>
+          letter.toUpperCase()
+        )
+    : 'Recommendation unavailable'
+
   return (
     <main className="dashboard-page">
       <section className="dashboard-header">
         <div>
-          <p className="eyebrow">FITZONE AI DASHBOARD</p>
+          <p className="eyebrow">
+            FITZONE AI DASHBOARD
+          </p>
 
           <h1>
             Welcome back,
             <br />
-            <span>let's get moving.</span>
+            <span>
+              let's get moving.
+            </span>
           </h1>
 
           <p>
-            Your fitness journey at a glance. Track today's activity, monitor
-            your progress, and stay consistent.
+            Your fitness journey at a
+            glance. Track today's
+            activity, monitor your
+            progress, and stay
+            consistent.
           </p>
         </div>
 
-        <Link to="/services" className="secondary-button">
+        <Link
+          to="/services"
+          className="secondary-button"
+        >
           Explore Fitness Tools
         </Link>
       </section>
@@ -294,7 +504,9 @@ function Dashboard() {
         <article className="dashboard-stat-card">
           <span>WEEKLY SCORE</span>
 
-          <strong>{weeklyScore}</strong>
+          <strong>
+            {weeklyScore}
+          </strong>
 
           <p>
             {weeklyScore >= 75
@@ -306,16 +518,25 @@ function Dashboard() {
         <article className="dashboard-stat-card">
           <span>WORKOUTS</span>
 
-          <strong>{weeklyWorkouts}</strong>
+          <strong>
+            {weeklyWorkouts}
+          </strong>
 
-          <p>of {weeklyWorkoutTarget} weekly goal</p>
+          <p>
+            of {weeklyWorkoutTarget}{' '}
+            weekly goal
+          </p>
         </article>
 
         <article className="dashboard-stat-card">
           <span>ACTIVE TIME</span>
 
           <strong>
-            {(weeklyActiveMinutes / 60).toFixed(1)}h
+            {(
+              weeklyActiveMinutes /
+              60
+            ).toFixed(1)}
+            h
           </strong>
 
           <p>This week</p>
@@ -324,7 +545,9 @@ function Dashboard() {
         <article className="dashboard-stat-card">
           <span>CONSISTENCY</span>
 
-          <strong>{consistency}%</strong>
+          <strong>
+            {consistency}%
+          </strong>
 
           <p>
             {consistency >= 75
@@ -338,7 +561,9 @@ function Dashboard() {
         <article className="dashboard-card today-workout">
           <div className="dashboard-card-heading">
             <div>
-              <p className="eyebrow">TODAY'S PLAN</p>
+              <p className="eyebrow">
+                TODAY'S PLAN
+              </p>
 
               <h2>
                 {todaysWorkout
@@ -348,7 +573,9 @@ function Dashboard() {
             </div>
 
             <span className="dashboard-status">
-              {todaysWorkout?.completed ? 'DONE' : 'READY'}
+              {todaysWorkout?.completed
+                ? 'DONE'
+                : 'READY'}
             </span>
           </div>
 
@@ -363,34 +590,44 @@ function Dashboard() {
               <span>DURATION</span>
 
               <strong>
-                {todaysWorkout?.duration_minutes || 0} min
+                {todaysWorkout?.duration_minutes ||
+                  0}{' '}
+                min
               </strong>
             </div>
 
             <div>
               <span>EXERCISES</span>
 
-              <strong>{exercises.length}</strong>
+              <strong>
+                {exercises.length}
+              </strong>
             </div>
 
             <div>
               <span>INTENSITY</span>
 
-              <strong>{workoutIntensity}</strong>
+              <strong>
+                {workoutIntensity}
+              </strong>
             </div>
           </div>
 
           {todaysWorkout ? (
             <button
               className="primary-button"
-              onClick={() => navigate('/workout')}
+              onClick={() =>
+                navigate('/workout')
+              }
             >
               Start Workout
             </button>
           ) : (
             <button
               className="primary-button"
-              onClick={() => navigate('/ai-plan')}
+              onClick={() =>
+                navigate('/ai-plan')
+              }
             >
               Generate Workout
             </button>
@@ -400,28 +637,120 @@ function Dashboard() {
         <article className="dashboard-card ai-insight">
           <div className="dashboard-card-heading">
             <div>
-              <p className="eyebrow">FITZONE AI</p>
-              <h2>Today's insight</h2>
+              <p className="eyebrow">
+                FITZONE AI
+              </p>
+
+              <h2>
+                Next best action
+              </h2>
             </div>
 
-            <span className="ai-badge">AI</span>
+            <span className="ai-badge">
+              AI
+            </span>
           </div>
 
-          <div className="ai-insight-content">
-            <div className="ai-score">
-              <strong>
-                {weeklyWorkouts}/{weeklyWorkoutTarget}
-              </strong>
+          {nextAction ? (
+            <>
+              <div className="ai-insight-content">
+                <div className="ai-score">
+                  <strong>
+                    {actionLabel}
+                  </strong>
 
-              <span>weekly target</span>
+                  <span>
+                    Priority:{' '}
+                    {nextAction.priority}
+                  </span>
+                </div>
+
+                <p>
+                  {nextAction.reason}
+                </p>
+              </div>
+
+              {recommendationError && (
+                <p
+                  style={{
+                    marginTop: '10px',
+                  }}
+                >
+                  {recommendationError}
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  marginTop: '16px',
+                }}
+              >
+                <button
+                  className="primary-button"
+                  onClick={() =>
+                    updateRecommendation({
+                      accepted: true,
+                    })
+                  }
+                  disabled={
+                    recommendationUpdating ||
+                    accepted === true
+                  }
+                >
+                  {accepted === true
+                    ? 'Accepted'
+                    : recommendationUpdating
+                      ? 'Updating...'
+                      : 'Accept'}
+                </button>
+
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    updateRecommendation({
+                      accepted: false,
+                    })
+                  }
+                  disabled={
+                    recommendationUpdating ||
+                    accepted === false
+                  }
+                >
+                  {accepted === false
+                    ? 'Skipped'
+                    : 'Skip'}
+                </button>
+
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    updateRecommendation({
+                      completed: true,
+                    })
+                  }
+                  disabled={
+                    recommendationUpdating ||
+                    completed === true
+                  }
+                >
+                  {completed === true
+                    ? 'Completed'
+                    : 'Mark Complete'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="ai-insight-content">
+              <p>
+                Your adaptive fitness
+                recommendation is
+                unavailable right now.
+              </p>
             </div>
-
-            <p>{insight}</p>
-          </div>
-
-          <Link to="/progress" className="text-link">
-            View fitness insights →
-          </Link>
+          )}
         </article>
       </section>
 
@@ -429,9 +758,13 @@ function Dashboard() {
         <article className="dashboard-card progress-card">
           <div className="dashboard-card-heading">
             <div>
-              <p className="eyebrow">PROGRESS</p>
+              <p className="eyebrow">
+                PROGRESS
+              </p>
 
-              <h2>Weekly activity</h2>
+              <h2>
+                Weekly activity
+              </h2>
             </div>
 
             <span className="progress-percent">
@@ -440,40 +773,62 @@ function Dashboard() {
           </div>
 
           <div className="weekly-chart">
-            {activityDays.map((day, index) => {
-              const activity = getActivityForDay(index)
+            {activityDays.map(
+              (day, index) => {
+                const activity =
+                  getActivityForDay(
+                    index
+                  )
 
-              return (
-                <div className="chart-day" key={day}>
+                return (
                   <div
-                    className={`chart-bar ${
-                      activity.completed ? 'completed' : ''
-                    }`}
-                    style={{ height: activity.height }}
-                  ></div>
+                    className="chart-day"
+                    key={day}
+                  >
+                    <div
+                      className={`chart-bar ${
+                        activity.completed
+                          ? 'completed'
+                          : ''
+                      }`}
+                      style={{
+                        height:
+                          activity.height,
+                      }}
+                    ></div>
 
-                  <span>{day}</span>
-                </div>
-              )
-            })}
+                    <span>
+                      {day}
+                    </span>
+                  </div>
+                )
+              }
+            )}
           </div>
         </article>
 
         <article className="dashboard-card goals-card">
           <div className="dashboard-card-heading">
             <div>
-              <p className="eyebrow">YOUR GOALS</p>
+              <p className="eyebrow">
+                YOUR GOALS
+              </p>
 
-              <h2>Current focus</h2>
+              <h2>
+                Current focus
+              </h2>
             </div>
           </div>
 
           <div className="goal-item">
             <div>
-              <span>Weekly workouts</span>
+              <span>
+                Weekly workouts
+              </span>
 
               <strong>
-                {weeklyWorkouts} / {weeklyWorkoutTarget}
+                {weeklyWorkouts} /{' '}
+                {weeklyWorkoutTarget}
               </strong>
             </div>
 
@@ -488,10 +843,13 @@ function Dashboard() {
 
           <div className="goal-item">
             <div>
-              <span>Active minutes</span>
+              <span>
+                Active minutes
+              </span>
 
               <strong>
-                {weeklyActiveMinutes} / {weeklyActiveMinuteTarget}
+                {weeklyActiveMinutes} /{' '}
+                {weeklyActiveMinuteTarget}
               </strong>
             </div>
 
@@ -506,16 +864,21 @@ function Dashboard() {
 
           <div className="goal-item">
             <div>
-              <span>Completed workouts</span>
+              <span>
+                Completed workouts
+              </span>
 
-              <strong>{totalCompletedWorkouts}</strong>
+              <strong>
+                {totalCompletedWorkouts}
+              </strong>
             </div>
 
             <div className="goal-progress">
               <div
                 style={{
                   width: `${Math.min(
-                    totalCompletedWorkouts * 10,
+                    totalCompletedWorkouts *
+                      10,
                     100
                   )}%`,
                 }}
