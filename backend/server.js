@@ -8,6 +8,11 @@ const {
   generateAssistantResponse,
 } = require('./services/assistantService')
 
+// ADAPTIVE RECOMMENDATION ENGINE
+const {
+  generateAdaptiveRecommendation,
+} = require('./services/adaptiveRecommendation')
+
 const {
   getProgressData,
 } = require('./services/ai/tools/progressTool')
@@ -19,6 +24,7 @@ const {
 const supabase = require('./supabase')
 const { generateWorkout } = require('./services/workoutGenerator')
 
+const { buildUserState } = require('./services/userState')
 const app = express()
 
 const PORT = process.env.PORT || 5000
@@ -1425,6 +1431,7 @@ app.get('/api/nutrition/insight', async (req, res) => {
 
 // FITNESS AI CONTEXT API
 app.get('/api/assistant/context', async (req, res) => {
+  
   const user = await authenticateUser(req, res)
 
   if (!user) return
@@ -1450,6 +1457,92 @@ app.get('/api/assistant/context', async (req, res) => {
   }
 })
 
+// USER STATE API
+app.get('/api/user-state', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    // Calculate personalized nutrition targets
+    const nutritionTargets =
+      calculateNutritionTargets(context.profile)
+
+    const state = buildUserState({
+      profile: context.profile,
+      goals: context.goals,
+      workouts: context.recent_workouts,
+      workoutLogs: context.recent_workout_logs,
+      nutritionToday: context.nutrition_today,
+      nutritionTargets,
+      progress: context.recent_progress,
+    })
+
+    res.json({
+      status: 'success',
+      state,
+    })
+  } catch (error) {
+    console.error('User state error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to build user state',
+    })
+  }
+})
+
+// ADAPTIVE RECOMMENDATION API
+app.get('/api/recommendation', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    // Calculate personalized nutrition targets
+    const nutritionTargets =
+      calculateNutritionTargets(context.profile)
+
+    const state = buildUserState({
+      profile: context.profile,
+      goals: context.goals,
+      workouts: context.recent_workouts,
+      workoutLogs: context.recent_workout_logs,
+      nutritionToday: context.nutrition_today,
+      nutritionTargets,
+      progress: context.recent_progress,
+    })
+
+    const recommendation =
+      generateAdaptiveRecommendation(state)
+
+    res.json({
+      status: 'success',
+      recommendation,
+    })
+  } catch (error) {
+    console.error(
+      'Adaptive recommendation error:',
+      error
+    )
+
+    res.status(500).json({
+      status: 'error',
+      message:
+        'Unable to generate adaptive recommendation',
+    })
+  }
+})
 // FITNESS AI CHAT API
 app.post('/api/assistant/chat', async (req, res) => {
   const user = await authenticateUser(req, res)
