@@ -25,7 +25,8 @@ const {
 
 async function generateNextBestAction(
   userState = {},
-  context = {}
+  context = {},
+  learning = {}
 ) {
   const features =
     buildIntelligenceFeatures(
@@ -46,100 +47,121 @@ async function generateNextBestAction(
       readiness
     });
 
-  let finalRanking = ranking;
+  let finalRanking =
+    ranking;
+
   let mlPredictions = [];
-  let mlEnabled = false;
+
+  let mlEnabled =
+    false;
 
   try {
-    const candidates =
-      ranking.candidates || [];
-
     mlPredictions =
       await Promise.all(
-        candidates.map(
-          async (candidate) => {
+        ranking.candidates.map(
+          async candidate => {
             try {
               const prediction =
                 await predictCompletion({
-                  age: Number(
-                    features.age || 0
-                  ),
-                  weight_kg: Number(
-                    features.weight_kg || 0
-                  ),
-                  height_cm: Number(
-                    features.height_cm || 0
-                  ),
+                  age:
+                    Number(
+                      features.age || 0
+                    ),
+
+                  weight_kg:
+                    Number(
+                      features.weight_kg || 0
+                    ),
+
+                  height_cm:
+                    Number(
+                      features.height_cm || 0
+                    ),
+
                   workout_days_per_week:
                     Number(
                       features.workout_days_per_week ||
                         0
                     ),
+
                   preferred_workout_duration:
                     Number(
                       features.preferred_workout_duration ||
                         0
                     ),
+
                   fitness_level:
                     String(
                       features.fitness_level ||
                         "Beginner"
                     ),
+
                   primary_goal:
                     String(
                       features.primary_goal ||
                         "Maintain Fitness"
                     ),
+
                   adherence_percentage:
                     Number(
                       features.adherence_percentage ||
                         0
                     ),
+
                   weekly_workout_progress:
                     Number(
                       features.weekly_workout_progress ||
                         0
                     ),
+
                   weekly_minute_progress:
                     Number(
                       features.weekly_minute_progress ||
                         0
                     ),
+
                   recent_sessions:
                     Number(
                       features.recent_sessions ||
                         0
                     ),
+
                   recent_active_minutes:
                     Number(
                       features.recent_active_minutes ||
                         0
                     ),
+
                   nutrition_available:
                     Number(
                       features.nutrition_available
                         ? 1
                         : 0
                     ),
+
                   calorie_percentage:
                     Number(
                       features.calorie_percentage ||
                         0
                     ),
+
                   protein_percentage:
                     Number(
                       features.protein_percentage ||
                         0
                     ),
+
                   readiness_score:
                     Number(
                       readiness.score || 0
                     ),
+
                   difficulty_preference:
                     Number(
                       features.difficulty_preference ||
                         0
                     ),
+
                   recommendation_action:
                     candidate.action
                 });
@@ -147,11 +169,13 @@ async function generateNextBestAction(
               return {
                 recommendation_action:
                   candidate.action,
+
                 completion_probability:
                   Number(
                     prediction.completion_probability ||
                       0
                   ),
+
                 predicted_completion:
                   Boolean(
                     prediction.predicted_completion
@@ -172,13 +196,26 @@ async function generateNextBestAction(
     mlPredictions =
       mlPredictions.filter(Boolean);
 
-    if (mlPredictions.length > 0) {
+    if (
+      mlPredictions.length > 0
+    ) {
       finalRanking =
         rankRecommendationsWithML({
           candidates:
             ranking.candidates,
+
           predictions:
-            mlPredictions
+            mlPredictions,
+
+          contextualAnalytics:
+            learning.contextual_analytics ||
+            [],
+
+          features,
+
+          adherence,
+
+          readiness
         });
 
       mlEnabled = true;
@@ -194,7 +231,9 @@ async function generateNextBestAction(
     validateRecommendation({
       action:
         finalRanking.selected.action,
+
       readiness,
+
       features
     });
 
@@ -207,11 +246,25 @@ async function generateNextBestAction(
   ) {
     selected = {
       action: "recovery",
+
       score: 100,
+
       combined_score: 100,
+
       reason:
         "Recovery was selected by the safety layer.",
-      ml_enabled: mlEnabled
+
+      ml_enabled:
+        mlEnabled,
+
+      historical_learning:
+        false,
+
+      completion_probability:
+        null,
+
+      predicted_completion:
+        null
     };
   }
 
@@ -238,6 +291,30 @@ async function generateNextBestAction(
 
     predicted_completion:
       selected.predicted_completion ??
+      null,
+
+    historical_learning:
+      selected.historical_learning ??
+      false,
+
+    historical_completion_rate:
+      selected.historical_completion_rate ??
+      null,
+
+    historical_sample_size:
+      selected.historical_sample_size ??
+      0,
+
+    context_similarity:
+      selected.context_similarity ??
+      0,
+
+    learning_evidence_strength:
+      selected.learning_evidence_strength ??
+      0,
+
+    current_context:
+      finalRanking.current_context ||
       null,
 
     readiness,

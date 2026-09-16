@@ -23,10 +23,6 @@ const {
 
 // ADAPTIVE RECOMMENDATION ENGINE
 const {
-  generateAdaptiveRecommendation,
-} = require('./services/adaptiveRecommendation')
-
-const {
   getProgressData,
 } = require('./services/ai/tools/progressTool')
 
@@ -1562,8 +1558,20 @@ app.get('/api/recommendation', async (req, res) => {
       progress: context.recent_progress,
     })
 
-    const recommendation =
-      generateAdaptiveRecommendation(state)
+    const intelligence =
+      await buildIntelligenceSnapshot(
+        supabase,
+        user.id
+      )
+
+    const recommendation = {
+      next_action:
+        intelligence.next_best_action,
+      user_state:
+        intelligence.user_state,
+      learning:
+        intelligence.learning
+    }
 
     const latestEventResult = await supabase
       .from('recommendation_events')
@@ -1602,7 +1610,56 @@ app.get('/api/recommendation', async (req, res) => {
           reason:
             recommendation.next_action.reason,
 
-          context_snapshot: state,
+          context_snapshot: {
+  ...state,
+
+  recommendation_intelligence: {
+    action:
+      recommendation.next_action.action,
+
+    score:
+      recommendation.next_action.score ??
+      null,
+
+    reason:
+      recommendation.next_action.reason ??
+      null,
+
+    ml_enabled:
+      recommendation.next_action.ml_enabled ??
+      false,
+
+    completion_probability:
+      recommendation.next_action
+        .completion_probability ??
+      null,
+
+    predicted_completion:
+      recommendation.next_action
+        .predicted_completion ??
+      null,
+
+    historical_learning:
+      recommendation.next_action
+        .historical_learning ??
+      false,
+
+    historical_completion_rate:
+      recommendation.next_action
+        .historical_completion_rate ??
+      null,
+
+    historical_sample_size:
+      recommendation.next_action
+        .historical_sample_size ??
+      0,
+
+    context_similarity:
+      recommendation.next_action
+        .context_similarity ??
+      0
+  }
+},
         }
       )
     } catch (insertError) {

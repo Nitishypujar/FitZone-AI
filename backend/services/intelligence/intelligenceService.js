@@ -39,16 +39,23 @@ async function buildIntelligenceSnapshot(
       nutritionTargets
     );
 
-  const nextBestAction =
-    await generateNextBestAction(
-      userState,
-      context
-    );
-
+  /*
+   * Learning must be loaded before
+   * recommendation generation so the
+   * ranking engine can use historical
+   * contextual outcomes.
+   */
   const learning =
     await getRecommendationLearning(
       supabase,
       userId
+    );
+
+  const nextBestAction =
+    await generateNextBestAction(
+      userState,
+      context,
+      learning
     );
 
   return {
