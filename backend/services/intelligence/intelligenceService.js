@@ -1,18 +1,23 @@
 ﻿const {
   buildFitnessContext
-} = require("../fitnessContext")
+} = require("../fitnessContext");
+
 const {
   buildUserState
-} = require("../userState")
+} = require("../userState");
+
 const {
   calculateNutritionTargets
-} = require("../nutritionCalculator")
+} = require("../nutritionCalculator");
+
 const {
   generateNextBestAction
-} = require("../ai/nextBestAction")
+} = require("../ai/nextBestAction");
+
 const {
   getRecommendationLearning
-} = require("./learningService")
+} = require("./learningService");
+
 async function buildIntelligenceSnapshot(
   supabase,
   userId
@@ -21,36 +26,45 @@ async function buildIntelligenceSnapshot(
     await buildFitnessContext(
       supabase,
       userId
-    )
+    );
+
   const nutritionTargets =
     calculateNutritionTargets(
       context.profile
-    )
+    );
+
   const userState =
     buildUserState(
       context,
       nutritionTargets
-    )
+    );
+
   const nextBestAction =
-    generateNextBestAction(
+    await generateNextBestAction(
       userState,
       context
-    )
+    );
+
   const learning =
     await getRecommendationLearning(
       supabase,
       userId
-    )
+    );
+
   return {
     generated_at:
       new Date().toISOString(),
+
     user_state:
       userState,
+
     next_best_action:
       nextBestAction,
+
     learning
-  }
+  };
 }
+
 module.exports = {
   buildIntelligenceSnapshot
-}
+};
