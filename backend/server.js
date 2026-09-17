@@ -4,6 +4,7 @@ const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
 const cors = require('cors')
 require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
+const { buildIntelligenceSnapshot } = require('./services/intelligence/intelligenceService')
 const { generateNutritionInsight } = require('./services/nutritionInsights')
 const { buildFitnessContext } = require('./services/fitnessContext')
 const {
