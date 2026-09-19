@@ -1,4 +1,4 @@
-﻿const helmet = require('helmet')
+const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
 
 const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').map(v => v.trim()).filter(Boolean)

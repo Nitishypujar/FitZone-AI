@@ -3,7 +3,7 @@ const express = require('express')
 const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
 const cors = require('cors')
 const helmet = require('helmet')
-const { corsOptions, globalLimiter, helmetOptions } = require('./middleware/security')
+const { corsOptions, globalLimiter, authLimiter, helmetOptions } = require('./middleware/security')
 require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
 const { buildIntelligenceSnapshot } = require('./services/intelligence/intelligenceService')
@@ -144,7 +144,6 @@ app.get('/api/db-test', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Database connection failed',
-        error: error.message,
       })
     }
 
@@ -167,7 +166,7 @@ app.get('/api/db-test', async (req, res) => {
 // REGISTER API
 // ============================================
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const {
       email,
@@ -233,7 +232,6 @@ app.post('/api/register', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'User created but profile creation failed',
-        error: profileError.message,
       })
     }
 
@@ -257,7 +255,7 @@ app.post('/api/register', async (req, res) => {
 // LOGIN API
 // ============================================
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body
 
@@ -323,7 +321,6 @@ app.get('/api/profile', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch profile',
-        error: error.message,
       })
     }
 
@@ -410,7 +407,6 @@ app.put('/api/profile', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to update profile',
-        error: error.message,
       })
     }
 
@@ -457,7 +453,6 @@ app.post('/api/workouts/generate', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to load user profile',
-        error: profileError.message,
       })
     }
 
@@ -486,7 +481,6 @@ app.post('/api/workouts/generate', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to save generated workout',
-        error: error.message,
       })
     }
 
@@ -535,7 +529,6 @@ app.get('/api/workouts', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch workouts',
-        error: error.message,
       })
     }
 
@@ -602,7 +595,6 @@ app.post('/api/workouts', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create workout',
-        error: error.message,
       })
     }
 
@@ -653,7 +645,6 @@ app.put('/api/workouts/:id', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to update workout',
-        error: error.message,
       })
     }
 
@@ -706,7 +697,6 @@ app.get('/api/workout-logs', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch workout logs',
-        error: error.message,
       })
     }
 
@@ -789,7 +779,6 @@ app.post('/api/workout-logs', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create workout log',
-        error: error.message,
       })
     }
 
@@ -833,7 +822,6 @@ app.get('/api/goals', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch goals',
-        error: error.message,
       })
     }
 
@@ -933,7 +921,6 @@ app.post('/api/goals', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create goal',
-        error: error.message,
       })
     }
 
@@ -1011,7 +998,6 @@ app.put('/api/goals/:id', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to update goal',
-        error: error.message,
       })
     }
 
@@ -1275,7 +1261,6 @@ app.get('/api/progress', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch progress',
-        error: error.message,
       })
     }
 
@@ -1353,7 +1338,6 @@ app.post('/api/progress', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create progress log',
-        error: error.message,
       })
     }
 
@@ -1493,7 +1477,6 @@ app.get('/api/assistant/context', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Unable to build fitness context',
-      error: error.message,
     })
   }
 })
@@ -1938,7 +1921,6 @@ app.get('/api/nutrition', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch nutrition logs',
-        error: error.message,
       })
     }
 
@@ -2019,7 +2001,6 @@ app.post('/api/nutrition', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create nutrition log',
-        error: error.message,
       })
     }
 
@@ -2095,7 +2076,6 @@ app.put('/api/nutrition/:id', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to update nutrition log',
-        error: error.message,
       })
     }
 
@@ -2142,7 +2122,6 @@ app.delete('/api/nutrition/:id', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to delete nutrition log',
-        error: error.message,
       })
     }
 
@@ -2336,7 +2315,6 @@ app.get('/api/ai-plan', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch AI plans',
-        error: error.message,
       })
     }
 
@@ -2403,7 +2381,6 @@ app.post('/api/ai-plan', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to create AI plan',
-        error: error.message,
       })
     }
 
@@ -2446,7 +2423,6 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Unable to fetch authenticated profile',
-        error: error.message,
       })
     }
 
@@ -2607,5 +2583,3 @@ app.listen(PORT, () => {
     `FitZone AI backend running on http://localhost:${PORT}`
   )
 })
-
-
