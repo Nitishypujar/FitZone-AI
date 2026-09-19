@@ -2,6 +2,8 @@ const activityProfileRouter = require("./services/ml/activityProfileRouter");
 const express = require('express')
 const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
 const cors = require('cors')
+const helmet = require('helmet')
+const { corsOptions, globalLimiter, helmetOptions } = require('./middleware/security')
 require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
 const { buildIntelligenceSnapshot } = require('./services/intelligence/intelligenceService')
@@ -40,8 +42,13 @@ app.locals.supabase = supabase;
 
 const PORT = process.env.PORT || 5000
 
-app.use(cors())
-app.use(express.json())
+app.disable('x-powered-by')
+app.set('trust proxy', 1)
+app.use(helmet(helmetOptions))
+app.use(cors(corsOptions))
+app.use(globalLimiter)
+app.use(express.json({ limit: '256kb' }))
+app.use(express.urlencoded({ extended: false, limit: '64kb' }))
 
 // ============================================
 // AUTHENTICATION HELPER
