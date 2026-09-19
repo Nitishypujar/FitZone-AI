@@ -1,0 +1,310 @@
+FITZONE AI — PROJECT OPERATIONS & RECOVERY GUIDE
+========================================================
+
+PURPOSE
+-------
+This is the single step-by-step operating guide for continuing FitZone AI
+without losing project state, code, database work, security work, or research.
+
+SOURCE OF TRUTH
+---------------
+1. GitHub main branch = source-control truth.
+2. F:\FitZone-AI = active local workspace.
+3. PROJECT_STATE.md = current project state.
+4. docs\PROJECT_CHECKPOINT.md = latest safe checkpoint.
+5. docs\DECISIONS.md = important architecture decisions.
+6. This file = operational procedure for the developer.
+
+BACKUP MODEL
+------------
+We use THREE independent protection layers:
+
+A. GitHub remote
+   - protects commit history and remote source.
+
+B. Local/off-site project backup
+   - E:\FitZone-Backups\FitZone-AI
+   - contains Git mirror + working tree snapshot.
+
+C. Supabase database backup
+   - must be handled separately.
+   - Database backups do NOT automatically contain Supabase Storage objects.
+   - Keep a separate secure record of Storage objects and configuration.
+
+DO NOT BACK UP
+--------------
+Never place these in a backup folder unless intentionally encrypted:
+- .env
+- .env.*
+- passwords
+- API keys
+- Supabase service-role keys
+- Gemini API keys
+- authentication secrets
+
+BACKUP BEFORE MAJOR WORK
+------------------------
+Run in CMD:
+
+cd /d F:\FitZone-AI
+tools\backup.cmd
+
+Recommended trigger points:
+- before database migrations
+- before authentication changes
+- before security changes
+- before AI architecture changes
+- before large refactors
+- before deployment
+- at the end of every major milestone
+
+BACKUP VERIFICATION
+-------------------
+After backup completes:
+1. Confirm the backup folder exists on E:.
+2. Confirm BACKUP_MANIFEST.txt exists.
+3. Confirm git\FitZone-AI.git\HEAD exists.
+4. Confirm project\ exists.
+5. Do not delete the previous known-good backup yet.
+
+RESTORE PROCEDURE
+-----------------
+1. Stop development servers.
+2. Identify the exact verified backup folder.
+3. Run:
+
+cd /d F:\FitZone-AI
+tools\restore.cmd
+
+4. Enter the backup folder path.
+5. Confirm restore.
+6. Recreate .env files from secure copies.
+7. Verify Git state.
+8. Restore database separately if required.
+9. Run health check:
+
+tools\health-check.cmd
+
+DATABASE BACKUP
+---------------
+Supabase is responsible for managed backups, but the project itself must still
+maintain an independent recovery procedure.
+
+For Free-plan projects, Supabase recommends regularly exporting data with
+the Supabase CLI db dump command and maintaining off-site backups.
+
+If using a plan with managed daily backups, still understand that:
+- database backups cover database data;
+- Storage API objects are separate;
+- Auth/settings/Realtime/API configuration may require separate reconfiguration;
+- PITR is a paid add-on and is useful when a small recovery point objective is required.
+
+Before any destructive database migration:
+1. Take/verify a database backup.
+2. Save the migration SQL.
+3. Record current Git commit.
+4. Apply migration.
+5. Test.
+6. Commit only after verification.
+
+CURRENT FITZONE RESUME POINT
+----------------------------
+Primary active loop:
+
+Recommendation
+   ->
+Actual Workout
+   ->
+Outcome
+   ->
+User State
+   ->
+Learning
+   ->
+Next Best Action
+
+Important current database relationship:
+recommendation_events.workout_id must be BIGINT because workouts.id is BIGINT.
+
+Do NOT:
+- change workouts.id
+- mark workouts complete from recommendation feedback
+- blindly complete the latest recommendation
+- duplicate workout completion endpoints
+- inflate historical learning weights
+
+NEXT IMPLEMENTATION ORDER
+-------------------------
+1. Verify the correct recommendation_events.workout_id BIGINT migration.
+2. Associate recommendations with explicitly relevant planned workouts.
+3. Keep recommendation feedback separate from actual workout completion.
+4. When the associated workout actually completes, record recommendation outcome.
+5. Recalculate user state.
+6. Verify learning update.
+7. Verify next-best-action change.
+8. Run end-to-end tests.
+9. Commit and push.
+10. Create a new checkpoint.
+
+SECURITY WORKSTREAM
+-------------------
+Security is a parallel workstream, not a final cosmetic feature.
+
+Target architecture:
+Internet
+ -> Cloudflare/CDN/WAF
+ -> HTTPS/TLS
+ -> security headers
+ -> rate limiting
+ -> authentication
+ -> authorization
+ -> validation
+ -> Express
+ -> business logic
+ -> AI safety
+ -> Supabase RLS/Postgres
+
+Security baseline:
+- OWASP ASVS 5.0 aligned
+- OWASP Top 10:2025
+- OWASP API Security Top 10
+- secure authentication/session handling
+- object-level authorization
+- RLS
+- strict CORS
+- Helmet/security headers
+- rate limiting
+- request-size limits
+- centralized safe errors
+- secret management
+- dependency security
+- secret scanning
+- CodeQL
+- security tests
+- AI prompt/context isolation
+- audit logging
+- production TLS/WAF/DDoS controls
+
+DEVELOPMENT OPERATING MODEL
+---------------------------
+Use controlled parallel workstreams.
+
+A — Product/UI
+B — Intelligence/adaptive loop
+C — AI assistant
+D — Data/ML
+E — Computer vision
+F — Security/platform
+G — Testing/research/documentation
+
+Only 3–5 meaningful items should be actively changing at once.
+
+Before integration:
+- run syntax checks
+- run relevant tests
+- inspect git diff
+- git diff --check
+- verify no secrets
+- commit a coherent unit
+
+DEFINITION OF DONE
+------------------
+A feature is NOT done when the code merely exists.
+
+Done =
+implemented
++ integrated
++ tested
++ error-handled
++ measurable where appropriate
++ documented
++ committed
++ pushed
++ checkpoint updated for major milestones
+
+DAILY CMD START
+---------------
+cd /d F:\FitZone-AI
+git status --short
+git log -1 --oneline
+tools\health-check.cmd
+
+MAJOR CHANGE FLOW
+-----------------
+1. health-check
+2. backup
+3. implement
+4. test
+5. inspect diff
+6. security check
+7. commit
+8. push
+9. checkpoint
+10. backup again if milestone is major
+
+USEFUL CMD COMMANDS
+-------------------
+Check status:
+git status
+
+Check recent history:
+git log --oneline -10
+
+Check changes:
+git diff
+
+Check staged changes:
+git diff --cached
+
+Check whitespace errors:
+git diff --check
+
+Check remote:
+git remote -v
+
+Check current branch:
+git branch --show-current
+
+Check ignored env:
+git check-ignore .env
+
+Backend syntax:
+node --check backend\server.js
+
+Frontend build:
+cd frontend
+npm run build
+
+Return to root:
+cd /d F:\FitZone-AI
+
+RECOVERY IF CHAT/CONVERSATION IS LOST
+-------------------------------------
+1. Open F:\FitZone-AI.
+2. Read PROJECT_STATE.md.
+3. Read docs\PROJECT_CHECKPOINT.md.
+4. Read docs\DECISIONS.md.
+5. Read this file.
+6. Run tools\health-check.cmd.
+7. Run git status.
+8. Continue from the latest checkpoint.
+9. Never reconstruct the project from memory if the files contain the state.
+
+SECURITY RULE
+-------------
+Never paste API keys, passwords, service-role keys, JWT secrets, or .env
+contents into chat.
+
+QUALITY RULE
+------------
+Prefer a smaller correct implementation over a larger fragile implementation.
+
+RECOVERY RULE
+-------------
+Every major architectural milestone must end with:
+- commit
+- push
+- checkpoint
+- backup
+
+END OF OPERATIONS GUIDE
