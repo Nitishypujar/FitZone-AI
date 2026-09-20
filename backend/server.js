@@ -1342,6 +1342,36 @@ app.put('/api/goals/:id', async (req, res) => {
   try {
     const goalId = req.params.id
 
+    if (!isValidUuid(goalId)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Goal ID must be a valid UUID',
+      })
+    }
+
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'goal_type',
+      'weekly_workout_target',
+      'weekly_active_minute_target',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported goal fields',
+      })
+    }
+
     const {
       goal_type,
       weekly_workout_target,
@@ -1349,28 +1379,63 @@ app.put('/api/goals/:id', async (req, res) => {
       completed,
     } = req.body
 
-    if (!goal_type) {
+    if (
+      !isAllowedValue(
+        goal_type,
+        [
+          'strength',
+          'muscle',
+          'weight-loss',
+          'fitness',
+        ],
+      )
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Goal type is required',
+        message: 'Invalid goal type',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_workout_target,
+        2,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly workout target must be an integer between 2 and 7',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_active_minute_target,
+        60,
+        500,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly active minute target must be an integer between 60 and 500',
+      })
+    }
+
+    if (!isValidBoolean(completed)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
       })
     }
 
     const payload = {
       goal_type,
-      weekly_workout_target:
-        weekly_workout_target === undefined ||
-          weekly_workout_target === null
-          ? null
-          : Number(weekly_workout_target),
-
-      weekly_active_minute_target:
-        weekly_active_minute_target === undefined ||
-          weekly_active_minute_target === null
-          ? null
-          : Number(weekly_active_minute_target),
-
-      completed: Boolean(completed),
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
     }
 
     const { data, error } = await supabase
