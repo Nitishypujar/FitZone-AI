@@ -1,5 +1,6 @@
-const activityProfileRouter = require("./services/ml/activityProfileRouter");
+﻿const activityProfileRouter = require("./services/ml/activityProfileRouter");
 const express = require('express')
+
 const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -34,6 +35,14 @@ const {
 } = require('./services/ai/tools/nutritionTool')
 
 const supabase = require('./supabase')
+const {
+  isNonEmptyString,
+  isValidInteger,
+  isValidNumber,
+  isAllowedValue,
+  requireBodyObject,
+  rejectUnknownFields,
+} = require('./middleware/validation')
 const { generateWorkout } = require('./services/workoutGenerator')
 
 const { buildUserState } = require('./services/userState')
@@ -341,7 +350,6 @@ app.get('/api/profile', async (req, res) => {
 // ============================================
 // PROFILE API - UPDATE
 // ============================================
-
 app.put('/api/profile', async (req, res) => {
   const user = await authenticateUser(req, res)
 
@@ -350,6 +358,34 @@ app.put('/api/profile', async (req, res) => {
   }
 
   try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'full_name',
+      'age',
+      'height_cm',
+      'weight_kg',
+      'fitness_level',
+      'primary_goal',
+      'workout_days_per_week',
+      'preferred_workout_duration',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported fields',
+        fields: unknownFields,
+      })
+    }
+
     const {
       full_name,
       age,
@@ -359,20 +395,117 @@ app.put('/api/profile', async (req, res) => {
       primary_goal,
       workout_days_per_week,
       preferred_workout_duration,
-
-      sex,
-      race_ethnicity,
-      education,
-      marital_status,
-      income_poverty_ratio,
-      vigorous_activity_days,
-      moderate_activity_days,
-      vigorous_minutes_week,
-      moderate_minutes_week,
-      sedentary_minutes_day,
     } = req.body
 
-    const { data, error } = await supabase
+    if (
+      full_name !== undefined &&
+      full_name !== null &&
+      !isNonEmptyString(full_name, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'full_name must be a non-empty string with a maximum length of 100 characters',
+      })
+    }
+
+    if (
+      age !== undefined &&
+      age !== null &&
+      !isValidInteger(age, 13, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'age must be an integer between 13 and 100',
+      })
+    }
+
+    if (
+      height_cm !== undefined &&
+      height_cm !== null &&
+      !isValidNumber(height_cm, 50, 250)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'height_cm must be a number between 50 and 250',
+      })
+    }
+
+    if (
+      weight_kg !== undefined &&
+      weight_kg !== null &&
+      !isValidNumber(weight_kg, 20, 300)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'weight_kg must be a number between 20 and 300',
+      })
+    }
+
+    const allowedFitnessLevels = [
+      'beginner',
+      'intermediate',
+      'advanced',
+    ]
+
+    if (
+      fitness_level !== undefined &&
+      fitness_level !== null &&
+      !isAllowedValue(
+        fitness_level,
+        allowedFitnessLevels,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'fitness_level contains an invalid value',
+      })
+    }
+
+    if (
+      primary_goal !== undefined &&
+      primary_goal !== null &&
+      !isNonEmptyString(primary_goal, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'primary_goal must be a non-empty string with a maximum length of 100 characters',
+      })
+    }
+
+    if (
+      workout_days_per_week !== undefined &&
+      workout_days_per_week !== null &&
+      !isValidInteger(
+        workout_days_per_week,
+        0,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'workout_days_per_week must be an integer between 0 and 7',
+      })
+    }
+
+    if (
+      preferred_workout_duration !== undefined &&
+      preferred_workout_duration !== null &&
+      !isValidInteger(
+        preferred_workout_duration,
+        5,
+        300,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'preferred_workout_duration must be an integer between 5 and 300 minutes',
+      })
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase
       .from('profiles')
       .update({
         full_name,
@@ -383,18 +516,6 @@ app.put('/api/profile', async (req, res) => {
         primary_goal,
         workout_days_per_week,
         preferred_workout_duration,
-      
-        sex,
-        race_ethnicity,
-        education,
-        marital_status,
-        income_poverty_ratio,
-        vigorous_activity_days,
-        moderate_activity_days,
-        vigorous_minutes_week,
-        moderate_minutes_week,
-        sedentary_minutes_day,
-      
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id)
@@ -424,7 +545,6 @@ app.put('/api/profile', async (req, res) => {
     })
   }
 })
-
 // ============================================
 // WORKOUT GENERATION API
 // ============================================
