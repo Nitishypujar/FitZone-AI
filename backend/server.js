@@ -555,6 +555,20 @@ app.post('/api/workouts/generate', async (req, res) => {
   if (!user) {
     return
   }
+  if (
+    req.body !== undefined &&
+    req.body !== null &&
+    (
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body) ||
+      Object.keys(req.body).length > 0
+    )
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout generation does not accept request body fields',
+    })
+  }
 
   try {
     const { data: profile, error: profileError } =
