@@ -1208,62 +1208,94 @@ app.post('/api/goals', async (req, res) => {
   }
 
   try {
-    const {
-      goal_type,
-      target_value,
-      current_value,
-      unit,
-      target_date,
-      completed,
-      weekly_workout_target,
-      weekly_active_minute_target,
-      current_weekly_workouts,
-      current_weekly_active_minutes,
-    } = req.body
+    if (!requireBodyObject(req, res)) {
+      return
+    }
 
-    if (!goal_type) {
+    const allowedFields = [
+      'goal_type',
+      'weekly_workout_target',
+      'weekly_active_minute_target',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
       return res.status(400).json({
         status: 'error',
-        message: 'Goal type is required',
+        message: 'Request contains unsupported goal fields',
+      })
+    }
+
+    const {
+      goal_type,
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
+    } = req.body
+
+    if (
+      !isAllowedValue(
+        goal_type,
+        [
+          'strength',
+          'muscle',
+          'weight-loss',
+          'fitness',
+        ],
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid goal type',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_workout_target,
+        2,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly workout target must be an integer between 2 and 7',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_active_minute_target,
+        60,
+        500,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly active minute target must be an integer between 60 and 500',
+      })
+    }
+
+    if (!isValidBoolean(completed)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
       })
     }
 
     const payload = {
       user_id: user.id,
       goal_type,
-      target_value:
-        target_value === undefined ||
-          target_value === null
-          ? null
-          : Number(target_value),
-      current_value:
-        current_value === undefined ||
-          current_value === null
-          ? 0
-          : Number(current_value),
-      unit: unit || null,
-      target_date: target_date || null,
-      completed: Boolean(completed),
-    }
-
-    if (weekly_workout_target !== undefined) {
-      payload.weekly_workout_target =
-        Number(weekly_workout_target)
-    }
-
-    if (weekly_active_minute_target !== undefined) {
-      payload.weekly_active_minute_target =
-        Number(weekly_active_minute_target)
-    }
-
-    if (current_weekly_workouts !== undefined) {
-      payload.current_weekly_workouts =
-        Number(current_weekly_workouts)
-    }
-
-    if (current_weekly_active_minutes !== undefined) {
-      payload.current_weekly_active_minutes =
-        Number(current_weekly_active_minutes)
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
     }
 
     const { data, error } = await supabase
