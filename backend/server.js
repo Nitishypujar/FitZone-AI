@@ -907,10 +907,80 @@ app.put('/api/workouts/:id', async (req, res) => {
       })
     }
 
+    let recommendationEvent = null
+
+    if (completed === true) {
+      try {
+        const workoutRecommendationActions = [
+          'follow-planned-workout',
+          'progress-workout',
+          'recovery',
+          'return-to-routine',
+          'increase-workout-consistency',
+        ]
+
+        const { data: pendingEvents, error: recommendationError } =
+          await supabase
+            .from('recommendation_events')
+            .select('*')
+            .eq('user_id', user.id)
+            .is('completed', null)
+            .in(
+              'recommendation_action',
+              workoutRecommendationActions
+            )
+            .order('generated_at', {
+              ascending: false,
+            })
+            .limit(1)
+
+        if (recommendationError) {
+          console.error(
+            'Recommendation outcome lookup error:',
+            recommendationError
+          )
+        } else if (
+          Array.isArray(pendingEvents) &&
+          pendingEvents.length > 0
+        ) {
+          const pendingEvent = pendingEvents[0]
+
+          const { data: updatedEvent, error: updateEventError } =
+            await supabase
+              .from('recommendation_events')
+              .update({
+                completed: true,
+                outcome_recorded_at:
+                  new Date().toISOString(),
+              })
+              .eq('id', pendingEvent.id)
+              .eq('user_id', user.id)
+              .is('completed', null)
+              .select()
+              .single()
+
+          if (updateEventError) {
+            console.error(
+              'Recommendation outcome update error:',
+              updateEventError
+            )
+          } else {
+            recommendationEvent = updatedEvent
+          }
+        }
+      } catch (recommendationOutcomeError) {
+        console.error(
+          'Recommendation outcome processing error:',
+          recommendationOutcomeError
+        )
+      }
+    }
+
     res.json({
       status: 'success',
       message: 'Workout updated successfully',
       workout: data,
+      recommendation_event: recommendationEvent,
     })
   } catch (error) {
     console.error('Workout update exception:', error)
