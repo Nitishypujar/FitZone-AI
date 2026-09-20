@@ -691,23 +691,109 @@ app.post('/api/workouts', async (req, res) => {
     return
   }
 
+  if (!requireBodyObject(req, res)) {
+    return
+  }
+
+  const allowedFields = [
+    'workout_name',
+    'workout_type',
+    'duration_minutes',
+    'difficulty',
+    'scheduled_date',
+    'exercises',
+  ]
+
+  const unknownFields = rejectUnknownFields(
+    req.body,
+    allowedFields
+  )
+
+  if (unknownFields.length > 0) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Request contains unsupported fields',
+      fields: unknownFields,
+    })
+  }
+
+  const {
+    workout_name,
+    workout_type,
+    duration_minutes,
+    difficulty,
+    scheduled_date,
+    exercises,
+  } = req.body
+
+  if (!isNonEmptyString(workout_name, 150)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout name must be a non-empty string',
+    })
+  }
+
+  if (
+    workout_type !== undefined &&
+    !isNonEmptyString(workout_type, 50)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout type must be a non-empty string',
+    })
+  }
+
+  if (
+    duration_minutes !== undefined &&
+    !isValidInteger(duration_minutes, 1, 600)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Duration must be an integer between 1 and 600 minutes',
+    })
+  }
+
+  if (
+    difficulty !== undefined &&
+    !isAllowedValue(difficulty, [
+      'beginner',
+      'intermediate',
+      'advanced',
+    ])
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid workout difficulty',
+    })
+  }
+
+  if (
+    scheduled_date !== undefined &&
+    (
+      typeof scheduled_date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date) ||
+      Number.isNaN(
+        Date.parse(`${scheduled_date}T00:00:00Z`)
+      )
+    )
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Scheduled date must be a valid YYYY-MM-DD date',
+    })
+  }
+
+  if (
+    exercises !== undefined &&
+    !Array.isArray(exercises)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Exercises must be an array',
+    })
+  }
+
   try {
-    const {
-      workout_name,
-      workout_type,
-      duration_minutes,
-      difficulty,
-      scheduled_date,
-      exercises,
-    } = req.body
-
-    if (!workout_name) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Workout name is required',
-      })
-    }
-
     const { data, error } = await supabase
       .from('workouts')
       .insert({
@@ -746,6 +832,7 @@ app.post('/api/workouts', async (req, res) => {
     })
   }
 })
+
 
 // ============================================
 // WORKOUTS API - UPDATE
