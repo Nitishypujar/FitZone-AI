@@ -39,6 +39,8 @@ const {
   isNonEmptyString,
   isValidInteger,
   isValidNumber,
+  isValidUuid,
+  isValidBoolean,
   isAllowedValue,
   requireBodyObject,
   rejectUnknownFields,
@@ -983,6 +985,10 @@ app.post('/api/workout-logs', async (req, res) => {
   }
 
   try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
     const {
       workout_id,
       exercise_name,
@@ -993,35 +999,129 @@ app.post('/api/workout-logs', async (req, res) => {
       completed,
     } = req.body
 
-    if (!exercise_name) {
+    const allowedFields = [
+      'workout_id',
+      'exercise_name',
+      'sets',
+      'repetitions',
+      'weight_kg',
+      'duration_seconds',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Unknown workout log field(s): ${unknownFields.join(', ')}`,
+      })
+    }
+
+    if (!isNonEmptyString(exercise_name, 150)) {
       return res.status(400).json({
         status: 'error',
         message: 'Exercise name is required',
       })
     }
 
+    if (
+      workout_id !== undefined &&
+      workout_id !== null &&
+      !isValidUuid(workout_id)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Workout ID must be a valid UUID',
+      })
+    }
+
+    if (
+      sets !== undefined &&
+      sets !== null &&
+      !isValidInteger(sets, 1, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Sets must be an integer between 1 and 100',
+      })
+    }
+
+    if (
+      repetitions !== undefined &&
+      repetitions !== null &&
+      !isValidInteger(repetitions, 1, 1000)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Repetitions must be an integer between 1 and 1000',
+      })
+    }
+
+    if (
+      weight_kg !== undefined &&
+      weight_kg !== null &&
+      !isValidNumber(weight_kg, 0, 1000)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Weight must be a number between 0 and 1000 kg',
+      })
+    }
+
+    if (
+      duration_seconds !== undefined &&
+      duration_seconds !== null &&
+      !isValidInteger(duration_seconds, 1, 86400)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Duration must be an integer between 1 and 86400 seconds',
+      })
+    }
+
+    if (
+      completed !== undefined &&
+      !isValidBoolean(completed)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
+      })
+    }
+
     const payload = {
       user_id: user.id,
-      workout_id: workout_id || null,
-      exercise_name,
+      workout_id:
+        workout_id === undefined || workout_id === null
+          ? null
+          : workout_id,
+      exercise_name: exercise_name.trim(),
       sets:
         sets === undefined || sets === null
           ? null
-          : Number(sets),
+          : sets,
       repetitions:
         repetitions === undefined || repetitions === null
           ? null
-          : Number(repetitions),
+          : repetitions,
       weight_kg:
         weight_kg === undefined || weight_kg === null
           ? null
-          : Number(weight_kg),
+          : weight_kg,
       duration_seconds:
         duration_seconds === undefined ||
-          duration_seconds === null
+        duration_seconds === null
           ? null
-          : Number(duration_seconds),
-      completed: Boolean(completed),
+          : duration_seconds,
+      completed:
+        completed === undefined
+          ? false
+          : completed,
     }
 
     const { data, error } = await supabase
