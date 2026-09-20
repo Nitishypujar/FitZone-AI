@@ -845,15 +845,51 @@ app.put('/api/workouts/:id', async (req, res) => {
     return
   }
 
+  if (!isValidUuid(req.params.id)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid workout ID',
+    })
+  }
+
+  if (!requireBodyObject(req, res)) {
+    return
+  }
+
+  const allowedFields = ['completed']
+
+  const unknownFields = rejectUnknownFields(
+    req.body,
+    allowedFields
+  )
+
+  if (unknownFields.length > 0) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Request contains unsupported fields',
+      fields: unknownFields,
+    })
+  }
+
+  const { completed } = req.body
+
+  if (!isValidBoolean(completed)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Completed must be a boolean',
+    })
+  }
+
   try {
     const workoutId = req.params.id
-    const { completed } = req.body
 
     const { data, error } = await supabase
       .from('workouts')
       .update({
-        completed: Boolean(completed),
-        completed_at: completed ? new Date().toISOString() : null,
+        completed,
+        completed_at: completed
+          ? new Date().toISOString()
+          : null,
       })
       .eq('id', workoutId)
       .eq('user_id', user.id)
