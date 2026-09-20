@@ -46,6 +46,32 @@ async function createRecommendationEvent(
   return data;
 }
 
+function calculateOutcomeScore(event = {}) {
+  let score = 0;
+
+  if (event.accepted === true) {
+    score += 0.25;
+  }
+
+  if (event.completed === true) {
+    score += 0.5;
+  }
+
+  const difficulty = Number(
+    event.difficulty_feedback
+  );
+
+  if (
+    Number.isFinite(difficulty) &&
+    difficulty >= 3 &&
+    difficulty <= 4
+  ) {
+    score += 0.25;
+  }
+
+  return Math.min(score, 1);
+}
+
 async function updateRecommendationEvent(
   supabase,
   userId,
@@ -96,7 +122,7 @@ async function updateRecommendationEvent(
   ];
 
   const outcomeRecorded = outcomeFields.some(
-    field =>
+    (field) =>
       Object.prototype.hasOwnProperty.call(
         updates,
         field
@@ -106,6 +132,55 @@ async function updateRecommendationEvent(
   if (outcomeRecorded) {
     payload.outcome_recorded_at =
       new Date().toISOString();
+  }
+
+  /*
+   * Calculate the outcome score from the complete
+   * recommendation event state.
+   *
+   * This is important when the user updates only one
+   * field at a time. We first load the existing event,
+   * merge the incoming update, then calculate the score.
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      updates,
+      "accepted"
+    ) ||
+    Object.prototype.hasOwnProperty.call(
+      updates,
+      "completed"
+    ) ||
+    Object.prototype.hasOwnProperty.call(
+      updates,
+      "difficulty_feedback"
+    )
+  ) {
+    const {
+      data: existingEvent,
+      error: existingEventError
+    } = await supabase
+      .from("recommendation_events")
+      .select(
+        "accepted, completed, difficulty_feedback, user_feedback, outcome_score"
+      )
+      .eq("id", eventId)
+      .eq("user_id", userId)
+      .single();
+
+    if (existingEventError) {
+      throw new Error(
+        existingEventError.message
+      );
+    }
+
+    const mergedEvent = {
+      ...existingEvent,
+      ...updates
+    };
+
+    payload.outcome_score =
+      calculateOutcomeScore(mergedEvent);
   }
 
   const { data, error } = await supabase

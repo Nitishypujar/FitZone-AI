@@ -846,8 +846,9 @@ app.put('/api/workouts/:id', async (req, res) => {
   if (!user) {
     return
   }
+  const workoutId = Number(req.params.id)
 
-  if (!isValidUuid(req.params.id)) {
+  if (!isValidInteger(Number(workoutId), 1)) {
     return res.status(400).json({
       status: 'error',
       message: 'Invalid workout ID',
@@ -883,8 +884,6 @@ app.put('/api/workouts/:id', async (req, res) => {
   }
 
   try {
-    const workoutId = req.params.id
-
     const { data, error } = await supabase
       .from('workouts')
       .update({
@@ -914,6 +913,8 @@ app.put('/api/workouts/:id', async (req, res) => {
         const workoutRecommendationActions = [
           'follow-planned-workout',
           'progress-workout',
+          'short-easy-workout',
+          'complete-planned-workout',
           'recovery',
           'return-to-routine',
           'increase-workout-consistency',
@@ -949,13 +950,12 @@ app.put('/api/workouts/:id', async (req, res) => {
             await supabase
               .from('recommendation_events')
               .update({
-                completed: true,
-                outcome_recorded_at:
-                  new Date().toISOString(),
+                   completed: true,
+                     outcome_recorded_at:
+                         new Date().toISOString(),
               })
               .eq('id', pendingEvent.id)
               .eq('user_id', user.id)
-              .is('completed', null)
               .select()
               .single()
 
@@ -1101,11 +1101,11 @@ app.post('/api/workout-logs', async (req, res) => {
     if (
       workout_id !== undefined &&
       workout_id !== null &&
-      !isValidUuid(workout_id)
+      !isValidInteger(workout_id, 1)
     ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Workout ID must be a valid UUID',
+        message: 'Workout ID must be a valid integer',
       })
     }
 

@@ -30,20 +30,41 @@ function Workout() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to load workouts.')
+        throw new Error(
+          data.message || 'Unable to load workouts.'
+        )
       }
 
-      const workoutList = data.workouts || []
+      const workoutList = Array.isArray(data.workouts)
+        ? data.workouts
+        : []
 
       setWorkouts(workoutList)
 
       if (workoutList.length > 0) {
-        setSelectedWorkout(workoutList[0])
-        await loadWorkoutLogs(workoutList[0].id)
+        const preferredWorkout =
+          workoutList.find(
+            (workout) =>
+              workout.completed !== true &&
+              Array.isArray(workout.exercises) &&
+              workout.exercises.length > 0
+          ) ||
+          workoutList.find(
+            (workout) =>
+              Array.isArray(workout.exercises) &&
+              workout.exercises.length > 0
+          ) ||
+          workoutList[0]
+
+        setSelectedWorkout(preferredWorkout)
+
+        await loadWorkoutLogs(preferredWorkout.id)
       }
     } catch (error) {
       console.error('Workout loading error:', error)
-      setError(error.message || 'Unable to load workout.')
+      setError(
+        error.message || 'Unable to load workout.'
+      )
     } finally {
       setLoading(false)
     }
@@ -63,15 +84,19 @@ function Workout() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to load workout logs.')
+        throw new Error(
+          data.message || 'Unable to load workout logs.'
+        )
       }
 
-      const logs = data.logs || []
+      const logs = Array.isArray(data.logs)
+        ? data.logs
+        : []
 
       const completed = logs
         .filter(
           (log) =>
-            log.workout_id === workoutId &&
+            Number(log.workout_id) === Number(workoutId) &&
             log.completed === true
         )
         .map((log) => log.exercise_name)
@@ -83,6 +108,7 @@ function Workout() {
   }
 
   async function selectWorkout(workout) {
+    setError('')
     setSelectedWorkout(workout)
     await loadWorkoutLogs(workout.id)
   }
@@ -90,12 +116,18 @@ function Workout() {
   async function toggleExercise(exercise) {
     if (!selectedWorkout) return
 
-    const isCompleted = completedExercises.includes(exercise.name)
+    setError('')
+
+    const isCompleted = completedExercises.includes(
+      exercise.name
+    )
 
     try {
       if (isCompleted) {
         setCompletedExercises((previous) =>
-          previous.filter((name) => name !== exercise.name)
+          previous.filter(
+            (name) => name !== exercise.name
+          )
         )
         return
       }
@@ -112,8 +144,11 @@ function Workout() {
             workout_id: selectedWorkout.id,
             exercise_name: exercise.name,
             sets: exercise.sets || null,
-            repetitions: exercise.repetitions || null,
-            duration_seconds: exercise.duration_seconds || null,
+            repetitions:
+              exercise.repetitions || null,
+            weight_kg: null,
+            duration_seconds:
+              exercise.duration_seconds || null,
             completed: true,
           }),
         }
@@ -122,7 +157,9 @@ function Workout() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Unable to save exercise.')
+        throw new Error(
+          data.message || 'Unable to save exercise.'
+        )
       }
 
       setCompletedExercises((previous) => [
@@ -130,13 +167,21 @@ function Workout() {
         exercise.name,
       ])
     } catch (error) {
-      console.error('Exercise completion error:', error)
-      setError(error.message || 'Unable to save exercise.')
+      console.error(
+        'Exercise completion error:',
+        error
+      )
+
+      setError(
+        error.message || 'Unable to save exercise.'
+      )
     }
   }
 
   async function completeWorkout() {
     if (!selectedWorkout) return
+
+    setError('')
 
     try {
       const response = await fetch(
@@ -157,27 +202,39 @@ function Workout() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || 'Unable to complete workout.'
+          data.message ||
+            'Unable to complete workout.'
         )
       }
 
       const updatedWorkout = {
         ...selectedWorkout,
         completed: true,
+        completed_at:
+          data.workout?.completed_at ||
+          new Date().toISOString(),
       }
 
       setSelectedWorkout(updatedWorkout)
 
       setWorkouts((previous) =>
         previous.map((workout) =>
-          workout.id === selectedWorkout.id
+          Number(workout.id) ===
+          Number(selectedWorkout.id)
             ? updatedWorkout
             : workout
         )
       )
     } catch (error) {
-      console.error('Workout completion error:', error)
-      setError(error.message || 'Unable to complete workout.')
+      console.error(
+        'Workout completion error:',
+        error
+      )
+
+      setError(
+        error.message ||
+          'Unable to complete workout.'
+      )
     }
   }
 
@@ -208,14 +265,32 @@ function Workout() {
     )
   }
 
-  const exercises = selectedWorkout.exercises || []
+  const exercises = Array.isArray(
+    selectedWorkout.exercises
+  )
+    ? selectedWorkout.exercises
+    : []
 
-  const completedCount = completedExercises.length
+  const completedCount =
+    completedExercises.length
 
   const progress =
     exercises.length > 0
-      ? Math.round((completedCount / exercises.length) * 100)
+      ? Math.min(
+          100,
+          Math.round(
+            (completedCount / exercises.length) *
+              100
+          )
+        )
       : 0
+
+  const availableWorkouts = workouts.filter(
+    (workout) =>
+      workout.completed !== true &&
+      Array.isArray(workout.exercises) &&
+      workout.exercises.length > 0
+  )
 
   return (
     <div className="page">
@@ -223,14 +298,16 @@ function Workout() {
 
       {error && <p>{error}</p>}
 
-      {workouts.length > 1 && (
+      {availableWorkouts.length > 1 && (
         <section>
           <h2>Your Workouts</h2>
 
-          {workouts.map((workout) => (
+          {availableWorkouts.map((workout) => (
             <button
               key={workout.id}
-              onClick={() => selectWorkout(workout)}
+              onClick={() =>
+                selectWorkout(workout)
+              }
             >
               {workout.workout_name}
             </button>
@@ -250,7 +327,8 @@ function Workout() {
         <h3>Session Progress</h3>
 
         <p>
-          {completedCount} / {exercises.length} exercises
+          {completedCount} / {exercises.length}{' '}
+          exercises
         </p>
 
         <p>{progress}%</p>
@@ -261,16 +339,20 @@ function Workout() {
 
         {exercises.length === 0 ? (
           <p>
-            This workout does not have exercises configured yet.
+            This workout does not have exercises
+            configured yet.
           </p>
         ) : (
           exercises.map((exercise, index) => {
-            const completed = completedExercises.includes(
-              exercise.name
-            )
+            const completed =
+              completedExercises.includes(
+                exercise.name
+              )
 
             return (
-              <div key={`${exercise.name}-${index}`}>
+              <div
+                key={`${exercise.name}-${index}`}
+              >
                 <h3>
                   {index + 1}. {exercise.name}
                 </h3>
@@ -289,9 +371,13 @@ function Workout() {
                 </p>
 
                 <button
-                  onClick={() => toggleExercise(exercise)}
+                  onClick={() =>
+                    toggleExercise(exercise)
+                  }
                 >
-                  {completed ? 'Completed ✓' : 'Complete Exercise'}
+                  {completed
+                    ? 'Completed ✓'
+                    : 'Complete Exercise'}
                 </button>
               </div>
             )
@@ -312,8 +398,8 @@ function Workout() {
 
           {selectedWorkout.completed && (
             <p>
-              Great work. Your completed workout has been
-              recorded.
+              Great work. Your completed workout
+              has been recorded.
             </p>
           )}
         </section>
