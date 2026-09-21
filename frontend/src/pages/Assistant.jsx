@@ -1,5 +1,8 @@
 import { useState } from 'react'
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+
 const suggestedQuestions = [
   'What should I do for my next workout?',
   'How can I improve my consistency?',
@@ -7,61 +10,120 @@ const suggestedQuestions = [
   'How can I stay motivated this week?',
 ]
 
-function getResponse(message) {
-  const text = message.toLowerCase()
-
-  if (text.includes('workout')) {
-    return "Based on your current fitness profile, staying consistent with your planned strength sessions would be a good next step. In the future, I'll use your actual workout history and goals to make this recommendation more personalized."
-  }
-
-  if (text.includes('consistency')) {
-    return 'You are currently building good momentum. Focus on completing your planned sessions rather than trying to make every workout perfect. Small, repeatable actions are easier to maintain over time.'
-  }
-
-  if (text.includes('recovery')) {
-    return 'A simple recovery routine could include light walking, gentle mobility work, hydration, and adequate rest. Your recovery routine should match your training intensity and how you feel.'
-  }
-
-  if (text.includes('motivat')) {
-    return 'Try setting one small target for today instead of focusing on the entire week. Completing one manageable action can help maintain momentum.'
-  }
-
-  return "That's a great question. I'm currently running in prototype mode. Once the FitZone AI backend is connected, I'll be able to use your goals, workouts, progress, and profile information to provide more personalized fitness guidance."
-}
-
 function Assistant() {
   const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: 'ai',
-      text: "Hi! I'm your FitZone AI assistant. Ask me about your workouts, goals, consistency, or general fitness routine.",
+      text: "Hi! I'm your FitZone AI assistant. Ask me about your workouts, goals, consistency, progress, nutrition, or general fitness routine.",
     },
   ])
 
-  function sendMessage(event) {
+  async function sendMessage(event) {
     event.preventDefault()
 
     const trimmedMessage = message.trim()
 
-    if (!trimmedMessage) {
+    if (!trimmedMessage || loading) {
+      return
+    }
+
+    const token = localStorage.getItem('fitzone_access_token')
+
+    if (!token) {
+      const errorMessage = {
+        id: `${Date.now()}-auth-error`,
+        sender: 'ai',
+        text: 'Your FitZone session has expired. Please log in again.',
+      }
+
+      setMessages((previous) => [...previous, errorMessage])
       return
     }
 
     const userMessage = {
-      id: Date.now(),
+      id: `${Date.now()}-user`,
       sender: 'user',
       text: trimmedMessage,
     }
 
-    const aiMessage = {
-      id: Date.now() + 1,
-      sender: 'ai',
-      text: getResponse(trimmedMessage),
-    }
-
-    setMessages((previous) => [...previous, userMessage, aiMessage])
+    setMessages((previous) => [...previous, userMessage])
     setMessage('')
+    setLoading(true)
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/assistant/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            question: trimmedMessage,
+            conversation_history: messages
+              .filter(
+                (item) =>
+                  item.sender === 'user' ||
+                  item.sender === 'ai'
+              )
+              .slice(-12)
+              .map((item) => ({
+                sender: item.sender,
+                text: item.text,
+              })),
+          }),
+        }
+      )
+
+      let data = {}
+
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `FitZone AI request failed with status ${response.status}.`
+        )
+      }
+
+      const answer =
+        data?.answer ||
+        data?.response ||
+        data?.message ||
+        'I could not generate a response right now.'
+
+      const aiMessage = {
+        id: `${Date.now()}-ai`,
+        sender: 'ai',
+        text: answer,
+      }
+
+      setMessages((previous) => [...previous, aiMessage])
+    } catch (error) {
+      console.error('Assistant request failed:', error)
+
+      const errorMessage = {
+        id: `${Date.now()}-error`,
+        sender: 'ai',
+        text:
+          error?.message ||
+          'I could not connect to FitZone AI right now. Please try again.',
+      }
+
+      setMessages((previous) => [...previous, errorMessage])
+    } finally {
+      setLoading(false)
+    }
   }
 
   function useSuggestion(question) {
@@ -81,9 +143,9 @@ function Assistant() {
           </h1>
 
           <p>
-            Ask questions about your workouts, goals, consistency, and general
-            fitness routine. The assistant will eventually use your personal
-            FitZone data to make its responses more relevant.
+            Ask questions about your workouts, goals, consistency, progress,
+            nutrition, and general fitness routine. FitZone AI uses your
+            available fitness data to make responses more personalized.
           </p>
         </div>
 
@@ -92,7 +154,7 @@ function Assistant() {
 
           <div>
             <strong>ASSISTANT STATUS</strong>
-            <p>Prototype mode</p>
+            <p>Connected</p>
           </div>
 
           <span className="assistant-status-dot"></span>
@@ -107,7 +169,7 @@ function Assistant() {
 
               <div>
                 <strong>FitZone Assistant</strong>
-                <span>General fitness guidance</span>
+                <span>Personalized fitness guidance</span>
               </div>
             </div>
 
@@ -130,6 +192,13 @@ function Assistant() {
                 <p>{item.text}</p>
               </div>
             ))}
+
+            {loading && (
+              <div className="assistant-message ai">
+                <div className="message-label">FITZONE AI</div>
+                <p>Thinking about your FitZone data...</p>
+              </div>
+            )}
           </div>
 
           <form className="assistant-input-area" onSubmit={sendMessage}>
@@ -138,9 +207,14 @@ function Assistant() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Ask FitZone AI something..."
+              disabled={loading}
             />
 
-            <button type="submit" aria-label="Send message">
+            <button
+              type="submit"
+              aria-label="Send message"
+              disabled={loading || !message.trim()}
+            >
               →
             </button>
           </form>
@@ -159,6 +233,7 @@ function Assistant() {
                 type="button"
                 key={question}
                 onClick={() => useSuggestion(question)}
+                disabled={loading}
               >
                 <span>+</span>
                 {question}
@@ -167,26 +242,26 @@ function Assistant() {
           </div>
 
           <div className="assistant-context">
-            <p className="eyebrow">FUTURE CONTEXT</p>
+            <p className="eyebrow">LIVE CONTEXT</p>
 
             <div>
               <span>GOALS</span>
-              <strong>Connected later</strong>
+              <strong>Connected</strong>
             </div>
 
             <div>
               <span>WORKOUT HISTORY</span>
-              <strong>Connected later</strong>
+              <strong>Connected</strong>
             </div>
 
             <div>
               <span>PROGRESS</span>
-              <strong>Connected later</strong>
+              <strong>Connected</strong>
             </div>
 
             <div>
               <span>NUTRITION</span>
-              <strong>Connected later</strong>
+              <strong>Connected</strong>
             </div>
           </div>
         </aside>

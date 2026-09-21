@@ -2382,37 +2382,72 @@ app.get('/api/recommendation/events', async (req, res) => {
 app.post('/api/assistant/chat', async (req, res) => {
   const user = await authenticateUser(req, res)
 
-  if (!user) return
+  if (!user) {
+    return
+  }
 
   try {
-    const { question } = req.body
+    const {
+      question,
+      conversation_history,
+    } = req.body
 
-    if (!question || !question.trim()) {
+    if (
+      !question ||
+      !question.trim()
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Assistant question is required',
+        message:
+          'Assistant question is required',
       })
     }
 
-    const context = await buildFitnessContext(
-      supabase,
-      user.id
-    )
+    const conversationHistory =
+      Array.isArray(
+        conversation_history
+      )
+        ? conversation_history
+            .filter(
+              (message) =>
+                message &&
+                (message.sender === 'user' ||
+                  message.sender === 'ai') &&
+                typeof message.text ===
+                  'string'
+            )
+            .slice(-12)
+        : []
 
-    const assistantResponse = await generateAssistantResponse({
-      question,
-      context,
-      supabase,
-      userId: user.id,
-    })
+    const context =
+      await buildFitnessContext(
+        supabase,
+        user.id
+      )
+
+    const assistantResponse =
+      await generateAssistantResponse({
+        question,
+        context,
+        supabase,
+        userId: user.id,
+        conversationHistory,
+      })
 
     res.json({
       status: 'success',
-      question: assistantResponse.question,
-      answer: assistantResponse.answer,
+      question:
+        assistantResponse.question,
+      intent:
+        assistantResponse.intent,
+      answer:
+        assistantResponse.answer,
     })
   } catch (error) {
-    console.error('Assistant chat error:', error)
+    console.error(
+      'Assistant chat error:',
+      error
+    )
 
     const statusCode =
       error?.statusCode ||
@@ -2425,9 +2460,12 @@ app.post('/api/assistant/chat', async (req, res) => {
 
     const isRateLimit =
       statusCode === 429 ||
-      errorCode === 'too_many_requests' ||
-      errorCode === 'rate_limit_exceeded' ||
-      errorCode === 'quota_exceeded'
+      errorCode ===
+        'too_many_requests' ||
+      errorCode ===
+        'rate_limit_exceeded' ||
+      errorCode ===
+        'quota_exceeded'
 
     if (isRateLimit) {
       return res.status(429).json({
@@ -2439,10 +2477,12 @@ app.post('/api/assistant/chat', async (req, res) => {
 
     res.status(500).json({
       status: 'error',
-      message: 'Unable to process assistant request',
+      message:
+        'Unable to process assistant request',
     })
   }
 })
+
 // NUTRITION TARGETS API
 app.get('/api/nutrition/targets', async (req, res) => {
   const user = await authenticateUser(req, res)
