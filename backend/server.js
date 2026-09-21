@@ -2052,27 +2052,11 @@ app.get('/api/user-state', async (req, res) => {
 app.get('/api/recommendation', async (req, res) => {
   const user = await authenticateUser(req, res)
 
-  if (!user) return
+  if (!user) {
+    return
+  }
 
   try {
-    const context = await buildFitnessContext(
-      supabase,
-      user.id
-    )
-
-    const nutritionTargets =
-      calculateNutritionTargets(context.profile)
-
-    const state = buildUserState({
-      profile: context.profile,
-      goals: context.goals,
-      workouts: context.recent_workouts,
-      workoutLogs: context.recent_workout_logs,
-      nutritionToday: context.nutrition_today,
-      nutritionTargets,
-      progress: context.recent_progress,
-    })
-
     const intelligence =
       await buildIntelligenceSnapshot(
         supabase,
@@ -2082,101 +2066,116 @@ app.get('/api/recommendation', async (req, res) => {
     const recommendation = {
       next_action:
         intelligence.next_best_action,
+
       user_state:
         intelligence.user_state,
+
       learning:
-        intelligence.learning
+        intelligence.learning,
     }
 
-    const latestEventResult = await supabase
-      .from('recommendation_events')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('generated_at', {
-        ascending: false,
-      })
-      .limit(1)
-      .maybeSingle()
+    const eventPayload = {
+      recommendation_type:
+        recommendation
+          .next_action
+          .action,
 
-    if (latestEventResult.error) {
-      throw new Error(
-        latestEventResult.error.message
-      )
+      recommendation_action:
+        recommendation
+          .next_action
+          .action,
+
+      recommendation:
+        recommendation
+          .next_action
+          .reason,
+
+      reason:
+        recommendation
+          .next_action
+          .reason,
+
+      context_snapshot: {
+        ...recommendation.user_state,
+
+        recommendation_intelligence: {
+          action:
+            recommendation
+              .next_action
+              .action,
+
+          score:
+            recommendation
+              .next_action
+              .score ??
+            null,
+
+          reason:
+            recommendation
+              .next_action
+              .reason ??
+            null,
+
+          ml_enabled:
+            recommendation
+              .next_action
+              .ml_enabled ??
+            false,
+
+          completion_probability:
+            recommendation
+              .next_action
+              .completion_probability ??
+            null,
+
+          predicted_completion:
+            recommendation
+              .next_action
+              .predicted_completion ??
+            null,
+
+          historical_learning:
+            recommendation
+              .next_action
+              .historical_learning ??
+            false,
+
+          historical_completion_rate:
+            recommendation
+              .next_action
+              .historical_completion_rate ??
+            null,
+
+          historical_sample_size:
+            recommendation
+              .next_action
+              .historical_sample_size ??
+            0,
+
+          context_similarity:
+            recommendation
+              .next_action
+              .context_similarity ??
+            0,
+
+          learning_evidence_strength:
+            recommendation
+              .next_action
+              .learning_evidence_strength ??
+            0,
+        },
+      },
     }
-
-
 
     let event
 
     try {
-      event = await createRecommendationEvent(
-        supabase,
-        user.id,
-        {
-          recommendation_type:
-            recommendation.next_action.action,
-
-          recommendation_action:
-            recommendation.next_action.action,
-
-          recommendation:
-            recommendation.next_action.reason,
-
-          reason:
-            recommendation.next_action.reason,
-
-          context_snapshot: {
-  ...state,
-
-  recommendation_intelligence: {
-    action:
-      recommendation.next_action.action,
-
-    score:
-      recommendation.next_action.score ??
-      null,
-
-    reason:
-      recommendation.next_action.reason ??
-      null,
-
-    ml_enabled:
-      recommendation.next_action.ml_enabled ??
-      false,
-
-    completion_probability:
-      recommendation.next_action
-        .completion_probability ??
-      null,
-
-    predicted_completion:
-      recommendation.next_action
-        .predicted_completion ??
-      null,
-
-    historical_learning:
-      recommendation.next_action
-        .historical_learning ??
-      false,
-
-    historical_completion_rate:
-      recommendation.next_action
-        .historical_completion_rate ??
-      null,
-
-    historical_sample_size:
-      recommendation.next_action
-        .historical_sample_size ??
-      0,
-
-    context_similarity:
-      recommendation.next_action
-        .context_similarity ??
-      0
-  }
-},
-        }
-      )
+      event =
+        await createRecommendationEvent(
+          supabase,
+          user.id,
+          eventPayload
+        )
     } catch (insertError) {
       if (
         insertError.message &&
@@ -2184,29 +2183,94 @@ app.get('/api/recommendation', async (req, res) => {
           'recommendation_events_pending_unique_idx'
         )
       ) {
-        const existingEventResult = await supabase
-          .from('recommendation_events')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq(
-            'recommendation_type',
-            recommendation.next_action.action
-          )
-          .eq(
-            'recommendation',
-            recommendation.next_action.reason
-          )
-          .is('accepted', null)
-          .is('completed', null)
-          .maybeSingle()
+        const existingEventResult =
+          await supabase
+            .from('recommendation_events')
+            .select('*')
+            .eq(
+              'user_id',
+              user.id
+            )
+            .eq(
+              'recommendation_type',
+              recommendation
+                .next_action
+                .action
+            )
+            .eq(
+              'recommendation',
+              recommendation
+                .next_action
+                .reason
+            )
+            .is(
+              'accepted',
+              null
+            )
+            .is(
+              'completed',
+              null
+            )
+            .maybeSingle()
 
-        if (existingEventResult.error) {
+        if (
+          existingEventResult.error
+        ) {
           throw new Error(
-            existingEventResult.error.message
+            existingEventResult
+              .error
+              .message
           )
         }
 
-        event = existingEventResult.data
+        event =
+          existingEventResult.data
+
+        if (event) {
+          const refreshedEventResult =
+            await supabase
+              .from(
+                'recommendation_events'
+              )
+              .update({
+                recommendation_action:
+                  eventPayload
+                    .recommendation_action,
+
+                reason:
+                  eventPayload.reason,
+
+                context_snapshot:
+                  eventPayload
+                    .context_snapshot,
+
+                generated_at:
+                  new Date().toISOString(),
+              })
+              .eq(
+                'id',
+                event.id
+              )
+              .eq(
+                'user_id',
+                user.id
+              )
+              .select('*')
+              .single()
+
+          if (
+            refreshedEventResult.error
+          ) {
+            throw new Error(
+              refreshedEventResult
+                .error
+                .message
+            )
+          }
+
+          event =
+            refreshedEventResult.data
+        }
       } else {
         throw insertError
       }
@@ -2223,10 +2287,13 @@ app.get('/api/recommendation', async (req, res) => {
 
       recommendation: {
         ...recommendation,
-        event_status: event,
+
+        event_status:
+          event,
       },
 
-      event_id: event.id,
+      event_id:
+        event.id,
     })
   } catch (error) {
     console.error(
@@ -2236,6 +2303,7 @@ app.get('/api/recommendation', async (req, res) => {
 
     return res.status(500).json({
       status: 'error',
+
       message:
         'Unable to generate adaptive recommendation',
     })

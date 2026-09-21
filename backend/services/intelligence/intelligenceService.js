@@ -1,22 +1,22 @@
 ﻿const {
-  buildFitnessContext
-} = require("../fitnessContext");
+  buildFitnessContext,
+} = require('../fitnessContext')
 
 const {
-  buildUserState
-} = require("../userState");
+  buildUserState,
+} = require('../userState')
 
 const {
-  calculateNutritionTargets
-} = require("../nutritionCalculator");
+  calculateNutritionTargets,
+} = require('../nutritionCalculator')
 
 const {
-  generateNextBestAction
-} = require("../ai/nextBestAction");
+  generateNextBestAction,
+} = require('../ai/nextBestAction')
 
 const {
-  getRecommendationLearning
-} = require("./learningService");
+  getRecommendationLearning,
+} = require('./learningService')
 
 async function buildIntelligenceSnapshot(
   supabase,
@@ -26,18 +26,38 @@ async function buildIntelligenceSnapshot(
     await buildFitnessContext(
       supabase,
       userId
-    );
+    )
 
   const nutritionTargets =
     calculateNutritionTargets(
       context.profile
-    );
+    )
 
   const userState =
-    buildUserState(
-      context,
-      nutritionTargets
-    );
+    buildUserState({
+      profile:
+        context.profile,
+
+      goals:
+        context.goals,
+
+      workouts:
+        context.recent_workouts,
+
+      workoutLogs:
+        context.recent_workout_logs,
+
+      nutritionToday:
+        context.nutrition_today,
+
+      nutritionTargets,
+
+      progress:
+        context.recent_progress,
+
+      weeklyWorkoutProgress:
+        context.weekly_workout_progress,
+    })
 
   /*
    * Learning must be loaded before
@@ -49,14 +69,14 @@ async function buildIntelligenceSnapshot(
     await getRecommendationLearning(
       supabase,
       userId
-    );
+    )
 
   const nextBestAction =
     await generateNextBestAction(
       userState,
       context,
       learning
-    );
+    )
 
   return {
     generated_at:
@@ -68,10 +88,10 @@ async function buildIntelligenceSnapshot(
     next_best_action:
       nextBestAction,
 
-    learning
-  };
+    learning,
+  }
 }
 
 module.exports = {
-  buildIntelligenceSnapshot
-};
+  buildIntelligenceSnapshot,
+}
