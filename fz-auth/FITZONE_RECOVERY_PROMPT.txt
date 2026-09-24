@@ -1,0 +1,34 @@
+FITZONE AI RECOVERY PROMPT
+
+I am continuing my FitZone AI project.
+
+Repository:
+https://github.com/Nitishypujar/FitZone-AI
+
+Read PROJECT_STATE.md and docs/PROJECT_CHECKPOINT.md before making changes.
+
+Treat the repository and checkpoint files as the source of truth.
+Continue from the exact current task instead of redesigning completed systems.
+
+Rules:
+- Inspect existing code before modifying it.
+- Preserve working functionality.
+- Do not duplicate existing APIs.
+- Make the smallest correct change.
+- Use CMD commands where possible.
+- Batch related commands when safe.
+- Test before committing.
+- Commit and push stable milestones.
+- Do not invent functionality or metrics.
+
+Current project goal:
+Build FitZone AI as a real adaptive fitness intelligence platform.
+
+Current checkpoint:
+
+Current database requirement:
+workouts.id is BIGINT.
+recommendation_events.workout_id must therefore be BIGINT when linked to workouts.id.
+
+Current next step:
+Add the correct database relationship, then connect the existing recommendation and workout completion flows.

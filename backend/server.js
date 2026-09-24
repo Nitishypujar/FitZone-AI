@@ -1,15 +1,16 @@
-﻿const activityProfileRouter = require("./services/ml/activityProfileRouter");
+const activityProfileRouter = require("./services/ml/activityProfileRouter");
 const express = require('express')
 
 const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
 const cors = require('cors')
 const helmet = require('helmet')
-const { corsOptions, globalLimiter, authLimiter, helmetOptions } = require('./middleware/security')
+const { corsOptions, globalLimiter, authLimiter, assistantLimiter, generationLimiter, mlTrainingLimiter, helmetOptions } = require('./middleware/security')
 require('dotenv').config()
 const { calculateNutritionTargets } = require('./services/nutritionCalculator')
 const { buildIntelligenceSnapshot } = require('./services/intelligence/intelligenceService')
 const { generateNutritionInsight } = require('./services/nutritionInsights')
 const { buildFitnessContext } = require('./services/fitnessContext')
+const { calculateWeeklyWorkoutProgress } = require('./services/weeklyProgress')
 const {
   generateAssistantResponse,
 } = require('./services/assistantService')
@@ -37,21 +38,43 @@ const {
 const supabase = require('./supabase')
 const {
   isNonEmptyString,
+  isValidEmail,
   isValidInteger,
   isValidNumber,
   isValidUuid,
+  isValidPositiveIntegerId,
   isValidBoolean,
   isAllowedValue,
   requireBodyObject,
   rejectUnknownFields,
 } = require('./middleware/validation')
-const { generateWorkout } = require('./services/workoutGenerator')
+const { generatePersonalizedWorkout } = require('./services/ai/personalizedWorkoutEngine')
+const { trainCompletionModelFromHistory } = require('./services/ml/trainFromHistory')
 
 const { buildUserState } = require('./services/userState')
 const app = express()
 app.locals.supabase = supabase;
 
 const PORT = process.env.PORT || 5000
+
+function getFrontendOrigin() {
+  const configuredOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  const candidate = configuredOrigins[0] || 'http://localhost:5173'
+
+  try {
+    return new URL(candidate).origin
+  } catch {
+    return 'http://localhost:5173'
+  }
+}
+
+function getEmailRedirectUrl() {
+  return `${getFrontendOrigin()}/register?confirmed=1`
+}
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
@@ -60,6 +83,10 @@ app.use(cors(corsOptions))
 app.use(globalLimiter)
 app.use(express.json({ limit: '256kb' }))
 app.use(express.urlencoded({ extended: false, limit: '64kb' }))
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store')
+  next()
+})
 
 // ============================================
 // AUTHENTICATION HELPER
@@ -139,15 +166,39 @@ app.get('/api/health', (req, res) => {
 })
 
 // ============================================
+// ML MODEL TRAINING (from real historical outcomes)
+// ============================================
+
+app.post('/api/ml/train', mlTrainingLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const result = await trainCompletionModelFromHistory()
+    res.json({ status: 'success', ...result })
+  } catch (error) {
+    console.error('ML training error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Unable to train the completion model.',
+    })
+  }
+})
+
+// ============================================
 // DATABASE TEST
 // ============================================
 
 app.get('/api/db-test', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('profiles')
       .select('id')
-      .limit(1)
+      .eq('id', user.id)
+      .single()
 
     if (error) {
       console.error('Database test error:', error)
@@ -161,7 +212,6 @@ app.get('/api/db-test', async (req, res) => {
     res.json({
       status: 'success',
       message: 'Database connection successful',
-      data,
     })
   } catch (error) {
     console.error('Database test exception:', error)
@@ -192,16 +242,25 @@ app.post('/api/register', authLimiter, async (req, res) => {
       preferred_workout_duration,
     } = req.body
 
-    if (!email || !password) {
+    if (!isValidEmail(email) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email and password are required',
+        message: 'Enter a valid email and a password between 8 and 128 characters.',
       })
     }
 
+    if (full_name !== undefined && full_name !== null && !isNonEmptyString(full_name, 120)) {
+      return res.status(400).json({ status: 'error', message: 'Name must be 120 characters or fewer.' })
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
+      options: {
+        emailRedirectTo: getEmailRedirectUrl(),
+      },
     })
 
     if (error) {
@@ -263,6 +322,40 @@ app.post('/api/register', authLimiter, async (req, res) => {
 })
 
 // ============================================
+// RESEND SIGN-UP CONFIRMATION
+// ============================================
+
+app.post('/api/register/resend-confirmation', authLimiter, async (req, res) => {
+  const { email } = req.body || {}
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Enter a valid email address.',
+    })
+  }
+
+  try {
+    await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+      options: {
+        emailRedirectTo: getEmailRedirectUrl(),
+      },
+    })
+  } catch (error) {
+    // Do not reveal whether an account exists. This endpoint intentionally
+    // returns the same user-facing response for resend failures.
+    console.error('Confirmation resend error:', error)
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'If this account still needs verification, a new confirmation email has been sent.',
+  })
+})
+
+// ============================================
 // LOGIN API
 // ============================================
 
@@ -270,10 +363,10 @@ app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body
 
-    if (!email || !password) {
+    if (!isValidEmail(email) || typeof password !== 'string' || password.length < 1 || password.length > 128) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email and password are required',
+        message: 'Invalid login details.',
       })
     }
 
@@ -286,9 +379,14 @@ app.post('/api/login', authLimiter, async (req, res) => {
     if (error) {
       console.error('Login error:', error)
 
+      const normalizedMessage = String(error.message || '').toLowerCase()
+      const message = normalizedMessage.includes('email not confirmed')
+        ? 'Please confirm your email address before signing in.'
+        : 'Invalid email or password.'
+
       return res.status(401).json({
         status: 'error',
-        message: error.message,
+        message,
       })
     }
 
@@ -551,12 +649,11 @@ app.put('/api/profile', async (req, res) => {
 // WORKOUT GENERATION API
 // ============================================
 
-app.post('/api/workouts/generate', async (req, res) => {
+app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
   const user = await authenticateUser(req, res)
 
-  if (!user) {
-    return
-  }
+  if (!user) return
+
   if (
     req.body !== undefined &&
     req.body !== null &&
@@ -573,28 +670,27 @@ app.post('/api/workouts/generate', async (req, res) => {
   }
 
   try {
-    const { data: profile, error: profileError } =
-      await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+    const intelligence = await buildIntelligenceSnapshot(supabase, user.id)
+    const userState = intelligence.user_state
+    const recommendation = intelligence.next_best_action
+    const profile = userState.profile
 
-    if (profileError) {
-      console.error(
-        'Profile fetch for workout generation error:',
-        profileError
-      )
+    const generatedWorkout = generatePersonalizedWorkout({
+      profile,
+      goalState: userState.goal_state,
+      weeklyProgress: {
+        weekly_completed_workouts: userState.goal_state.current_weekly_workouts,
+        weekly_active_minutes: userState.goal_state.current_weekly_active_minutes,
+      },
+      trainingLoad: {
+        level: recommendation?.action === 'recovery' ? 'high' : '',
+      },
+      recommendation,
+    })
 
-      return res.status(500).json({
-        status: 'error',
-        message: 'Unable to load user profile',
-      })
-    }
+    const today = new Date().toISOString().split('T')[0]
 
-    const generatedWorkout = generateWorkout(profile)
-
-    const { data, error } = await supabase
+    const { data: workout, error: workoutError } = await supabase
       .from('workouts')
       .insert({
         user_id: user.id,
@@ -603,35 +699,175 @@ app.post('/api/workouts/generate', async (req, res) => {
         duration_minutes: generatedWorkout.duration_minutes,
         difficulty: generatedWorkout.difficulty,
         exercises: generatedWorkout.exercises,
-        scheduled_date: new Date()
-          .toISOString()
-          .split('T')[0],
+        scheduled_date: today,
         completed: false,
       })
       .select()
       .single()
 
-    if (error) {
-      console.error('Generated workout save error:', error)
-
+    if (workoutError) {
+      console.error('Generated workout save error:', workoutError)
       return res.status(500).json({
         status: 'error',
         message: 'Unable to save generated workout',
       })
     }
 
+    // The recommendation event is created after the workout exists so the
+    // event can point to the exact generated workout. This removes the old
+    // snapshot-based guesswork used during completion.
+    const eventPayload = {
+      recommendation_type: recommendation?.action || 'follow-planned-workout',
+      recommendation_action: recommendation?.action || 'follow-planned-workout',
+      recommendation: recommendation?.reason || 'Follow your personalized FitZone plan.',
+      reason: recommendation?.reason || null,
+      context_snapshot: {
+        ...userState,
+        recommended_workout_id: workout.id,
+        recommendation_intelligence: recommendation || null,
+      },
+    }
+
+    let recommendationEvent = null
+    try {
+      recommendationEvent = await createRecommendationEvent(
+        supabase,
+        user.id,
+        eventPayload,
+      )
+    } catch (eventError) {
+      // A pending uniqueness constraint can mean another request already
+      // created the same recommendation. Recover that event and attach the
+      // newly generated workout to it rather than creating duplicate history.
+      if (String(eventError.message || '').includes('recommendation_events_pending_unique_idx')) {
+        const { data: existingEvent, error: existingError } = await supabase
+          .from('recommendation_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('recommendation_action', eventPayload.recommendation_action)
+          .is('accepted', null)
+          .is('completed', null)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (existingError) throw new Error(existingError.message)
+        recommendationEvent = existingEvent || null
+      } else {
+        console.error('Recommendation event creation error:', eventError)
+      }
+    }
+
+    if (recommendationEvent?.id) {
+      const { data: linkedEvent, error: linkError } = await supabase
+        .from('recommendation_events')
+        .update({
+          workout_id: workout.id,
+          context_snapshot: {
+            ...(recommendationEvent.context_snapshot || {}),
+            ...eventPayload.context_snapshot,
+          },
+        })
+        .eq('id', recommendationEvent.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (linkError) {
+        // The migration is required for exact identity. Do not fail the
+        // workout itself if an older database has not been migrated yet.
+        console.error('Recommendation workout link error:', linkError)
+      } else {
+        recommendationEvent = linkedEvent
+      }
+    }
+
     res.status(201).json({
       status: 'success',
       message: 'Personalized workout generated successfully',
-      workout: data,
-      metadata: generatedWorkout.metadata,
+      workout,
+      recommendation_event: recommendationEvent,
+      event_id: recommendationEvent?.id || null,
+      metadata: generatedWorkout.personalization,
+      intelligence: {
+        action: recommendation?.action || null,
+        reason: recommendation?.reason || null,
+        effective_goal: profile?.primary_goal || 'General Fitness',
+        ml_enabled: recommendation?.ml_enabled === true,
+        ml_source: recommendation?.ml_source || 'unavailable',
+      },
     })
   } catch (error) {
     console.error('Workout generation exception:', error)
-
     res.status(500).json({
       status: 'error',
       message: 'Workout generation failed',
+    })
+  }
+})
+
+// ============================================
+// WORKOUTS API - CURRENT / RECOMMENDED
+// ============================================
+
+app.get('/api/workouts/current', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: event, error: eventError } = await supabase
+      .from('recommendation_events')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('completed', null)
+      .not('workout_id', 'is', null)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (eventError) {
+      console.error('Current workout recommendation lookup error:', eventError)
+    }
+
+    let workout = null
+
+    if (event?.workout_id !== null && event?.workout_id !== undefined) {
+      const result = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('id', event.workout_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (result.error) throw new Error(result.error.message)
+      workout = result.data || null
+    }
+
+    if (!workout) {
+      const today = new Date().toISOString().split('T')[0]
+      const fallback = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('completed', false)
+        .eq('scheduled_date', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (fallback.error) throw new Error(fallback.error.message)
+      workout = fallback.data || null
+    }
+
+    res.json({
+      status: 'success',
+      workout,
+      recommendation_event: event || null,
+      source: event?.workout_id ? 'recommendation-event' : 'today-fallback',
+    })
+  } catch (error) {
+    console.error('Current workout fetch error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to fetch the current workout',
     })
   }
 })
@@ -899,6 +1135,9 @@ app.put('/api/workouts/:id', async (req, res) => {
 
     if (error) {
       console.error('Workout update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Workout not found' })
+      }
 
       return res.status(500).json({
         status: 'error',
@@ -910,6 +1149,22 @@ app.put('/api/workouts/:id', async (req, res) => {
 
     if (completed === true) {
       try {
+        const { data: exactEvent, error: exactEventError } = await supabase
+          .from('recommendation_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('workout_id', workoutId)
+          .is('completed', null)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (exactEventError) {
+          console.error('Exact recommendation event lookup error:', exactEventError)
+        }
+
+        let matchingEvent = exactEvent || null
+
         const workoutRecommendationActions = [
           'follow-planned-workout',
           'progress-workout',
@@ -918,6 +1173,13 @@ app.put('/api/workouts/:id', async (req, res) => {
           'recovery',
           'return-to-routine',
           'increase-workout-consistency',
+          'fat-loss-workout',
+          'strength-workout',
+          'hypertrophy-workout',
+          'endurance-workout',
+          'full-body-workout',
+          'maintain-fitness-workout',
+          'mobility-workout',
         ]
 
         const { data: pendingEvents, error: recommendationError } =
@@ -933,39 +1195,44 @@ app.put('/api/workouts/:id', async (req, res) => {
             .order('generated_at', {
               ascending: false,
             })
-            .limit(1)
+            .limit(25)
 
         if (recommendationError) {
           console.error(
             'Recommendation outcome lookup error:',
             recommendationError
           )
-        } else if (
-          Array.isArray(pendingEvents) &&
-          pendingEvents.length > 0
-        ) {
-          const pendingEvent = pendingEvents[0]
+        } else {
+          if (!matchingEvent) {
+            matchingEvent = (pendingEvents || []).find((event) => {
+              const snapshot = event?.context_snapshot || {}
+              const directId = snapshot.recommended_workout_id ?? snapshot.recommendation_workout_id
+              const nestedId = snapshot.workout_state?.current_workout?.id
+              return String(directId ?? nestedId ?? '') === String(workoutId)
+            }) || null
+          }
 
-          const { data: updatedEvent, error: updateEventError } =
-            await supabase
-              .from('recommendation_events')
-              .update({
-                   completed: true,
-                     outcome_recorded_at:
-                         new Date().toISOString(),
-              })
-              .eq('id', pendingEvent.id)
-              .eq('user_id', user.id)
-              .select()
-              .single()
+          if (matchingEvent) {
+            const { data: updatedEvent, error: updateEventError } =
+              await supabase
+                .from('recommendation_events')
+                .update({
+                  completed: true,
+                  outcome_recorded_at: new Date().toISOString(),
+                })
+                .eq('id', matchingEvent.id)
+                .eq('user_id', user.id)
+                .select()
+                .single()
 
-          if (updateEventError) {
-            console.error(
-              'Recommendation outcome update error:',
-              updateEventError
-            )
-          } else {
-            recommendationEvent = updatedEvent
+            if (updateEventError) {
+              console.error(
+                'Recommendation outcome update error:',
+                updateEventError
+              )
+            } else {
+              recommendationEvent = updatedEvent
+            }
           }
         }
       } catch (recommendationOutcomeError) {
@@ -1312,7 +1579,16 @@ app.post('/api/goals', async (req, res) => {
       !isAllowedValue(
         goal_type,
         [
+          'fat-loss',
+          'weight-gain',
+          'muscle-growth',
           'strength',
+          'endurance',
+          'general-fitness',
+          'maintain-fitness',
+          'flexibility',
+          'stamina',
+          // Legacy values remain accepted so existing users are not broken.
           'muscle',
           'weight-loss',
           'fitness',
@@ -1383,6 +1659,15 @@ app.post('/api/goals', async (req, res) => {
       })
     }
 
+    const { error: profileGoalError } = await supabase
+      .from('profiles')
+      .update({ primary_goal: goal_type })
+      .eq('id', user.id)
+
+    if (profileGoalError) {
+      console.error('Profile goal synchronization warning:', profileGoalError)
+    }
+
     res.status(201).json({
       status: 'success',
       message: 'Goal created successfully',
@@ -1412,10 +1697,12 @@ app.put('/api/goals/:id', async (req, res) => {
   try {
     const goalId = req.params.id
 
-    if (!isValidUuid(goalId)) {
+    // goals.id is a numeric database identifier (not a UUID).
+    // Keep UUID validation for UUID-backed resources such as recommendation_events.
+    if (!isValidPositiveIntegerId(goalId)) {
       return res.status(400).json({
         status: 'error',
-        message: 'Goal ID must be a valid UUID',
+        message: 'Goal ID must be a positive integer',
       })
     }
 
@@ -1453,7 +1740,16 @@ app.put('/api/goals/:id', async (req, res) => {
       !isAllowedValue(
         goal_type,
         [
+          'fat-loss',
+          'weight-gain',
+          'muscle-growth',
           'strength',
+          'endurance',
+          'general-fitness',
+          'maintain-fitness',
+          'flexibility',
+          'stamina',
+          // Legacy values remain accepted so existing users are not broken.
           'muscle',
           'weight-loss',
           'fitness',
@@ -1518,11 +1814,27 @@ app.put('/api/goals/:id', async (req, res) => {
 
     if (error) {
       console.error('Goal update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Goal not found' })
+      }
 
       return res.status(500).json({
         status: 'error',
         message: 'Unable to update goal',
       })
+    }
+
+    // Keep the profile goal synchronized with the active goal so all
+    // downstream nutrition and intelligence calculations observe the same intent.
+    const { error: profileGoalError } = await supabase
+      .from('profiles')
+      .update({ primary_goal: goal_type })
+      .eq('id', user.id)
+
+    if (profileGoalError) {
+      // The goals row remains authoritative for active intelligence state.
+      // Profile synchronization is best-effort for legacy profile consumers.
+      console.error('Profile goal synchronization warning:', profileGoalError)
     }
 
     res.json({
@@ -1625,65 +1937,27 @@ app.get('/api/dashboard/summary', async (req, res) => {
     )
 
     // --------------------------------------------
-    // CURRENT WEEK
+    // CURRENT WEEK (AUTHORITATIVE)
     // --------------------------------------------
 
-    const now = new Date()
+    const weeklyProgress =
+      calculateWeeklyWorkoutProgress(workouts || [])
 
-    const currentDay = now.getDay()
+    const weeklyCompletedWorkouts = (workouts || []).filter((workout) => {
+      const completionDate = workout.completed_at
+        ? new Date(workout.completed_at)
+        : null
 
-    // Monday = start of week
-    const mondayOffset =
-      currentDay === 0 ? -6 : 1 - currentDay
-
-    const weekStart = new Date(now)
-
-    weekStart.setDate(
-      now.getDate() + mondayOffset
-    )
-
-    weekStart.setHours(0, 0, 0, 0)
-
-    const weekEnd = new Date(weekStart)
-
-    weekEnd.setDate(
-      weekStart.getDate() + 7
-    )
-
-    // --------------------------------------------
-    // WEEKLY COMPLETED WORKOUTS
-    // --------------------------------------------
-
-    const weeklyCompletedWorkouts =
-      completedWorkouts.filter((workout) => {
-        const completionDate =
-          workout.completed_at
-            ? new Date(workout.completed_at)
-            : workout.updated_at
-              ? new Date(workout.updated_at)
-              : null
-
-        return (
-          completionDate &&
-          completionDate >= weekStart &&
-          completionDate < weekEnd
-        )
-      })
-
-    // --------------------------------------------
-    // WEEKLY ACTIVE MINUTES
-    // --------------------------------------------
+      return Boolean(
+        workout.completed === true &&
+        completionDate &&
+        completionDate >= new Date(weeklyProgress.week_start) &&
+        completionDate < new Date(weeklyProgress.week_end)
+      )
+    })
 
     const weeklyActiveMinutes =
-      weeklyCompletedWorkouts.reduce(
-        (total, workout) => {
-          return (
-            total +
-            Number(workout.duration_minutes || 0)
-          )
-        },
-        0
-      )
+      weeklyProgress.weekly_active_minutes
 
     // --------------------------------------------
     // WEEKLY WORKOUT TARGET
@@ -2029,6 +2303,7 @@ app.get('/api/user-state', async (req, res) => {
       nutritionToday: context.nutrition_today,
       nutritionTargets,
       progress: context.recent_progress,
+      weeklyWorkoutProgress: context.weekly_workout_progress,
     })
 
     res.json({
@@ -2098,6 +2373,9 @@ app.get('/api/recommendation', async (req, res) => {
       context_snapshot: {
         ...recommendation.user_state,
 
+        recommended_workout_id:
+          recommendation.user_state?.workout_state?.current_workout?.id || null,
+
         recommendation_intelligence: {
           action:
             recommendation
@@ -2157,6 +2435,9 @@ app.get('/api/recommendation', async (req, res) => {
               .next_action
               .context_similarity ??
             0,
+
+          readiness_level:
+            recommendation.next_action.readiness?.level || null,
 
           learning_evidence_strength:
             recommendation
@@ -2379,7 +2660,7 @@ app.get('/api/recommendation/events', async (req, res) => {
 })
 
 // FITNESS AI CHAT API
-app.post('/api/assistant/chat', async (req, res) => {
+app.post('/api/assistant/chat', assistantLimiter, async (req, res) => {
   const user = await authenticateUser(req, res)
 
   if (!user) {
@@ -2392,14 +2673,10 @@ app.post('/api/assistant/chat', async (req, res) => {
       conversation_history,
     } = req.body
 
-    if (
-      !question ||
-      !question.trim()
-    ) {
+    if (!isNonEmptyString(question, 2000)) {
       return res.status(400).json({
         status: 'error',
-        message:
-          'Assistant question is required',
+        message: 'Assistant question is required and must be 2000 characters or fewer',
       })
     }
 
@@ -2414,7 +2691,8 @@ app.post('/api/assistant/chat', async (req, res) => {
                 (message.sender === 'user' ||
                   message.sender === 'ai') &&
                 typeof message.text ===
-                  'string'
+                  'string' &&
+                message.text.length <= 2000
             )
             .slice(-12)
         : []
@@ -2442,6 +2720,8 @@ app.post('/api/assistant/chat', async (req, res) => {
         assistantResponse.intent,
       answer:
         assistantResponse.answer,
+      intelligence:
+        assistantResponse.intelligence || null,
     })
   } catch (error) {
     console.error(
@@ -2582,6 +2862,26 @@ app.post('/api/nutrition', async (req, res) => {
   }
 
   try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'meal_type',
+      'meal_name',
+      'calories',
+      'protein_g',
+      'carbohydrates_g',
+      'fats_g',
+    ]
+
+    if (rejectUnknownFields(req.body, allowedFields).length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported nutrition fields',
+      })
+    }
+
     const {
       meal_type,
       meal_name,
@@ -2591,11 +2891,30 @@ app.post('/api/nutrition', async (req, res) => {
       fats_g,
     } = req.body
 
-    if (!meal_name) {
+    const allowedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+
+    if (!isNonEmptyString(meal_name, 120)) {
       return res.status(400).json({
         status: 'error',
-        message: 'Meal name is required',
+        message: 'Meal name is required and must be 120 characters or fewer',
       })
+    }
+
+    if (meal_type !== undefined && meal_type !== null && !isAllowedValue(meal_type, allowedMealTypes)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid meal type',
+      })
+    }
+
+    const numericFields = { calories, protein_g, carbohydrates_g, fats_g }
+    for (const [field, value] of Object.entries(numericFields)) {
+      if (value !== undefined && value !== null && (!isValidNumber(Number(value), 0, 100000))) {
+        return res.status(400).json({
+          status: 'error',
+          message: `${field} must be a finite non-negative number`,
+        })
+      }
     }
 
     const payload = {
@@ -2665,6 +2984,15 @@ app.put('/api/nutrition/:id', async (req, res) => {
   try {
     const nutritionId = req.params.id
 
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = ['meal_type', 'meal_name', 'calories', 'protein_g', 'carbohydrates_g', 'fats_g']
+    if (rejectUnknownFields(req.body, allowedFields).length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Request contains unsupported nutrition fields' })
+    }
+
     const {
       meal_type,
       meal_name,
@@ -2673,6 +3001,16 @@ app.put('/api/nutrition/:id', async (req, res) => {
       carbohydrates_g,
       fats_g,
     } = req.body
+
+    if (!isNonEmptyString(meal_name, 120) || !isAllowedValue(meal_type, ['Breakfast', 'Lunch', 'Dinner', 'Snack'])) {
+      return res.status(400).json({ status: 'error', message: 'Invalid meal details' })
+    }
+
+    for (const [field, value] of Object.entries({ calories, protein_g, carbohydrates_g, fats_g })) {
+      if (value !== undefined && value !== null && !isValidNumber(Number(value), 0, 100000)) {
+        return res.status(400).json({ status: 'error', message: `${field} must be a finite non-negative number` })
+      }
+    }
 
     const { data, error } = await supabase
       .from('nutrition_logs')
@@ -2704,6 +3042,9 @@ app.put('/api/nutrition/:id', async (req, res) => {
 
     if (error) {
       console.error('Nutrition update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Nutrition log not found' })
+      }
 
       return res.status(500).json({
         status: 'error',
@@ -2750,6 +3091,9 @@ app.delete('/api/nutrition/:id', async (req, res) => {
 
     if (error) {
       console.error('Nutrition delete error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Nutrition log not found' })
+      }
 
       return res.status(500).json({
         status: 'error',
@@ -2968,7 +3312,7 @@ app.get('/api/ai-plan', async (req, res) => {
 // AI PLAN API - POST
 // ============================================
 
-app.post('/api/ai-plan', async (req, res) => {
+app.post('/api/ai-plan', generationLimiter, async (req, res) => {
   const user = await authenticateUser(req, res)
 
   if (!user) {
@@ -3034,6 +3378,23 @@ app.post('/api/ai-plan', async (req, res) => {
 // ============================================
 // PROFILE + AUTH STATUS API
 // ============================================
+
+app.get('/api/auth/session', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  res.json({
+    status: 'success',
+    authenticated: true,
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+  })
+})
 
 app.get('/api/auth/me', async (req, res) => {
   const user = await authenticateUser(req, res)
@@ -3158,7 +3519,13 @@ app.get("/api/activity-profile/model-status", (req, res) => {
   }
 });
 
-app.post("/api/activity-profile/features", authenticateUser, (req, res) => {
+app.post("/api/activity-profile/features", async (req, res) => {
+  const user = await authenticateUser(req, res);
+
+  if (!user) {
+    return;
+  }
+
   try {
     const features = prepareFeatures(req.body);
 

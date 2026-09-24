@@ -1,0 +1,31 @@
+{
+  "model_name": "FitZone Activity Level Model",
+  "model_type": "Random Forest Classifier",
+  "classes": [
+    "Low",
+    "Moderate",
+    "High"
+  ],
+  "training_dataset": "NHANES 2017-March 2020",
+  "purpose": "Population-level physical activity profile classification",
+  "features": [
+    "age",
+    "sex",
+    "race_ethnicity",
+    "education",
+    "marital_status",
+    "income_poverty_ratio",
+    "vigorous_activity_days",
+    "moderate_activity_days",
+    "vigorous_minutes_week",
+    "moderate_minutes_week",
+    "sedentary_minutes_day"
+  ],
+  "metrics": {
+    "accuracy": 0.98531,
+    "balanced_accuracy": 0.984755,
+    "macro_f1": 0.983537,
+    "weighted_f1": 0.985374
+  },
+  "warning": "This model is a population activity-profile baseline and is not a workout-adherence predictor."
+}

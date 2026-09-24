@@ -1,0 +1,95 @@
+FITZONE AI — FINAL POLISHED BUILD HANDOFF
+=========================================
+
+Target restore path:
+F:\FitZone-AI
+
+This ZIP is source-only. Secrets and node_modules are intentionally excluded.
+
+WHAT WAS FIXED
+--------------
+1. Exact recommendation_events -> workouts identity via workout_id.
+2. New /api/workouts/current endpoint.
+3. Workout completion resolves the exact recommendation event first.
+4. Nine-goal system with backward compatibility for old goal values.
+5. Goal-aware recommendation candidate generation.
+6. ML reporting distinguishes trained_model / cold_start / unavailable.
+7. AI Assistant chat persistence moved to per-user localStorage.
+8. Cross-tab assistant sync + Clear chat action.
+9. React Query cache invalidation/refetch improvements.
+10. AI Plan redesigned and linked to exact generated workout/event.
+11. My Workout redesigned and uses authoritative current workout.
+12. Dashboard prefers the authoritative current workout.
+13. Backend now has npm start.
+14. Added migration, source verifier, full Windows verification script, and validation report.
+
+RESTORE STEPS
+-------------
+1. Extract this ZIP directly into F:\FitZone-AI.
+2. Keep your existing .env files; the ZIP contains no secrets.
+3. Open Supabase SQL Editor.
+4. Run:
+   backend\migrations\2026-09-24-recommendation-workout-link.sql
+   This does NOT change workouts.id.
+
+CMD 1 — ML
+----------
+cls
+cd /d F:\FitZone-AI\ai-service
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+
+CMD 2 — BACKEND
+---------------
+cls
+cd /d F:\FitZone-AI\backend
+npm install
+npm start
+
+CMD 3 — FRONTEND
+----------------
+cls
+cd /d F:\FitZone-AI\frontend
+npm install
+npm run dev
+
+OPEN
+----
+Frontend: http://localhost:5173/
+Backend:  http://localhost:5000/
+ML:       http://127.0.0.1:8000/health
+
+SOURCE TESTS
+------------
+From CMD 2:
+npm run verify
+npm test
+
+Then from F:\FitZone-AI:
+tools\run-all-tests.cmd
+
+EXPECTED FINAL ACCEPTANCE FLOW
+------------------------------
+1. Log in.
+2. Open Goals.
+3. Save a goal.
+4. Open AI Plan.
+5. Confirm the effective goal matches the goal you saved.
+6. Generate a workout.
+7. Confirm the generated workout ID is shown.
+8. Open My Workout.
+9. Confirm the same workout ID/session is selected.
+10. Complete the workout.
+11. Confirm Dashboard/Progress update after navigation.
+12. Open AI Assistant, ask a question, navigate to another page, return, and confirm the previous conversation remains.
+13. Change the goal.
+14. Return to AI Plan/Assistant and confirm the effective goal changes.
+
+Do NOT re-complete an already completed workout merely for testing. Generate a new uncompleted workout for a fresh acceptance run.
+
+KNOWN VERIFICATION LIMIT
+------------------------
+The packaged source was validated for backend syntax, backend adaptive smoke tests, Python syntax, goal/workout generation logic, CSS balance, and integration contracts.
+The final ZIP cannot truthfully claim live Supabase, Gemini, authenticated browser, or Windows Vite runtime verification because those services require the user's environment and credentials.
+
+If a runtime error appears after restore, capture the exact CMD/browser error and continue from this build; do not replace the source with an older ZIP.

@@ -1,0 +1,43 @@
+FitZone AI — Restore
+
+EXTRACT THIS ZIP DIRECTLY INTO:
+F:\FitZone-AI
+
+Do not extract into F:\FitZone-AI\FitZone-AI. The ZIP contents already use backend/, frontend/, ai-service/, etc.
+
+Before starting, keep your existing .env files and secrets. This package intentionally does not include them.
+
+CMD 1 — ML service
+cls
+cd /d F:\FitZone-AI\ai-service
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+
+CMD 2 — backend
+cls
+cd /d F:\FitZone-AI\backend
+npm install
+npm start
+
+CMD 3 — frontend
+cls
+cd /d F:\FitZone-AI\frontend
+npm install
+npm run dev
+
+Open: http://localhost:5173/
+Backend: http://localhost:5000/
+ML: http://127.0.0.1:8000/health
+Activity-profile ML can use ACTIVITY_PROFILE_ML_SERVICE_URL (defaults to the hosted activity-profile service).
+
+DATABASE MIGRATION — REQUIRED ONCE
+Open Supabase SQL Editor and run:
+backend\migrations\2026-09-24-recommendation-workout-link.sql
+This adds `recommendation_events.workout_id`; it does not change `workouts.id`.
+
+After restore, do not copy node_modules from this ZIP. Reinstall them on Windows.
+
+Validation after restore:
+node -e "fetch('http://localhost:5000/api/health').then(r=>r.text()).then(console.log).catch(console.error)"
+
+Run `npm run verify` from `F:\FitZone-AI\backend` after installing dependencies. Then use `tools\health-check.cmd`.

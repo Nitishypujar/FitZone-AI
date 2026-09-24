@@ -32,8 +32,8 @@
   display: grid;
   place-items: center;
 
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 20px;
   font-weight: 900;
@@ -45,7 +45,7 @@
 }
 
 .brand-name span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .nav-links {
@@ -60,7 +60,7 @@
 }
 
 .nav-links a:hover {
-  color: #f8fafc;
+  color: var(--color-chalk);
 }
 
 .nav-button {
@@ -69,15 +69,15 @@
   border-radius: 8px;
 
   background: transparent;
-  color: #f8fafc;
+  color: var(--color-chalk);
 
   font-size: 14px;
   transition: all 0.2s ease;
 }
 
 .nav-button:hover {
-  border-color: #a3ff12;
-  color: #a3ff12;
+  border-color: var(--color-amber);
+  color: var(--color-amber);
 }
 
 /* HERO */
@@ -102,7 +102,7 @@
 .eyebrow {
   margin: 0 0 22px;
 
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 2.5px;
@@ -118,7 +118,7 @@
 }
 
 .hero h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .hero-description {
@@ -146,9 +146,9 @@
 }
 
 .primary-button {
-  border: 1px solid #a3ff12;
-  background: #a3ff12;
-  color: #0b0f14;
+  border: 1px solid var(--color-amber);
+  background: var(--color-amber);
+  color: var(--color-ink);
 }
 
 .primary-button:hover {
@@ -158,7 +158,7 @@
 .secondary-button {
   border: 1px solid #27303a;
   background: transparent;
-  color: #f8fafc;
+  color: var(--color-chalk);
 }
 
 .secondary-button:hover {
@@ -202,7 +202,7 @@
   height: 330px;
   border-radius: 50%;
 
-  background: #a3ff12;
+  background: var(--color-amber);
   opacity: 0.08;
   filter: blur(80px);
 }
@@ -234,8 +234,8 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #a3ff12;
-  box-shadow: 0 0 14px #a3ff12;
+  background: var(--color-amber);
+  box-shadow: 0 0 14px var(--color-amber);
 }
 
 .score {
@@ -273,7 +273,7 @@
   width: 78%;
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .card-stats {
@@ -349,7 +349,7 @@
 }
 
 .feature-icon {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -386,7 +386,7 @@
 }
 
 .about-preview h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .about-preview > p:last-child {
@@ -507,7 +507,7 @@ footer p {
 }
 
 .membership-hero h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .membership-hero > p:last-child {
@@ -545,7 +545,7 @@ footer p {
 }
 
 .pricing-card.featured {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
   box-shadow: 0 20px 60px rgba(163, 255, 18, 0.06);
 }
 
@@ -558,8 +558,8 @@ footer p {
   padding: 7px 12px;
 
   border-radius: 20px;
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 9px;
   font-weight: 900;
@@ -569,7 +569,7 @@ footer p {
 
 .plan-name {
   margin: 0;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -637,7 +637,7 @@ footer p {
 
 .check {
   flex-shrink: 0;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-weight: 800;
 }
 
@@ -650,7 +650,7 @@ footer p {
   border-radius: 9px;
 
   background: transparent;
-  color: #f8fafc;
+  color: var(--color-chalk);
 
   text-align: center;
   font-size: 13px;
@@ -660,18 +660,18 @@ footer p {
 }
 
 .plan-button:hover {
-  border-color: #a3ff12;
-  color: #a3ff12;
+  border-color: var(--color-amber);
+  color: var(--color-amber);
 }
 
 .plan-button-primary {
-  border-color: #a3ff12;
-  background: #a3ff12;
-  color: #0b0f14;
+  border-color: var(--color-amber);
+  background: var(--color-amber);
+  color: var(--color-ink);
 }
 
 .plan-button-primary:hover {
-  color: #0b0f14;
+  color: var(--color-ink);
   transform: translateY(-2px);
 }
 
@@ -694,7 +694,7 @@ footer p {
 }
 
 .membership-bottom h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .membership-bottom > p:not(.eyebrow) {
@@ -761,7 +761,7 @@ footer p {
 }
 
 .services-hero h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .services-hero > p:last-child {
@@ -818,7 +818,7 @@ footer p {
 }
 
 .service-number {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 1px;
@@ -856,7 +856,7 @@ footer p {
   right: 30px;
   bottom: 30px;
 
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 20px;
 
   opacity: 0.6;
@@ -889,7 +889,7 @@ footer p {
 }
 
 .services-cta h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .services-cta > p:not(.eyebrow) {
@@ -949,7 +949,7 @@ footer p {
 }
 
 .about-hero h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .about-hero > p:last-child {
@@ -984,7 +984,7 @@ footer p {
 }
 
 .problem-content h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .problem-content p {
@@ -1009,7 +1009,7 @@ footer p {
 }
 
 .vision-section .section-heading h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .steps-grid {
@@ -1031,7 +1031,7 @@ footer p {
 }
 
 .step-number {
-  color: #a3ff12;
+  color: var(--color-amber);
 
   font-size: 12px;
   font-weight: 900;
@@ -1076,7 +1076,7 @@ footer p {
 }
 
 .technology-content h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .technology-content p:not(.eyebrow) {
@@ -1106,7 +1106,7 @@ footer p {
 }
 
 .technology-stack strong {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
 }
 
@@ -1139,7 +1139,7 @@ footer p {
 }
 
 .about-cta h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .about-cta > p:not(.eyebrow) {
@@ -1219,7 +1219,7 @@ footer p {
 }
 
 .contact-hero h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .contact-hero > p:last-child {
@@ -1337,8 +1337,8 @@ footer p {
 
   outline: none;
 
-  background: #0b0f14;
-  color: #f8fafc;
+  background: var(--color-ink);
+  color: var(--color-chalk);
 
   font-size: 13px;
 
@@ -1357,7 +1357,7 @@ footer p {
 
 .contact-form input:focus,
 .contact-form textarea:focus {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
 }
 
 .contact-form .primary-button {
@@ -1393,8 +1393,8 @@ footer p {
 
   border-radius: 50%;
 
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 22px;
   font-weight: 900;
@@ -1433,7 +1433,7 @@ footer p {
 }
 
 .contact-faq > h2 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .faq-grid {
@@ -1547,7 +1547,7 @@ footer p {
 }
 
 .auth-intro h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .auth-intro > p:last-child {
@@ -1612,8 +1612,8 @@ footer p {
 
   outline: none;
 
-  background: #0b0f14;
-  color: #f8fafc;
+  background: var(--color-ink);
+  color: var(--color-chalk);
 
   font-size: 13px;
 
@@ -1625,7 +1625,7 @@ footer p {
 }
 
 .auth-form input:focus {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
 }
 
 .auth-submit {
@@ -1638,6 +1638,74 @@ footer p {
 
   color: #f87171;
   font-size: 12px;
+}
+
+.auth-success {
+  margin: -5px 0 0;
+  color: #a7f3d0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.verification-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.verification-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(234, 162, 49, 0.35);
+  border-radius: 50%;
+  background: rgba(234, 162, 49, 0.08);
+  color: var(--color-amber);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.verification-state h2 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -1px;
+}
+
+.verification-state > p:not(.eyebrow):not(.auth-error):not(.auth-success) {
+  max-width: 420px;
+  margin: 12px auto 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.verification-email {
+  width: 100%;
+  margin-top: 20px;
+  padding: 13px 15px;
+  border: 1px solid #27303a;
+  border-radius: 9px;
+  background: #121a22;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-text-button {
+  margin-top: 14px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auth-text-button:hover {
+  color: var(--color-amber);
 }
 
 .auth-divider {
@@ -1674,7 +1742,7 @@ footer p {
 }
 
 .auth-switch a {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-weight: 700;
 }
 
@@ -1741,7 +1809,7 @@ footer p {
 }
 
 .dashboard-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .dashboard-header > div > p:last-child {
@@ -1781,7 +1849,7 @@ footer p {
 .dashboard-stat-card strong {
   display: block;
   margin-top: 16px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 32px;
   letter-spacing: -1px;
 }
@@ -1816,7 +1884,7 @@ footer p {
 
 .dashboard-card-heading h2 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 25px;
   letter-spacing: -1px;
 }
@@ -1826,14 +1894,14 @@ footer p {
   padding: 7px 10px;
   border: 1px solid #334155;
   border-radius: 6px;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 .ai-badge {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
 }
 
 .dashboard-card-description {
@@ -1871,7 +1939,7 @@ footer p {
 
 .workout-details strong {
   margin-top: 7px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 13px;
 }
 
@@ -1887,7 +1955,7 @@ footer p {
 }
 
 .ai-score strong {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 38px;
   letter-spacing: -2px;
 }
@@ -1907,7 +1975,7 @@ footer p {
 .text-link {
   display: inline-block;
   margin-top: 25px;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 11px;
   font-weight: 700;
 }
@@ -1919,7 +1987,7 @@ footer p {
 }
 
 .progress-percent {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1954,7 +2022,7 @@ footer p {
 }
 
 .chart-bar.completed {
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .chart-day span {
@@ -1986,7 +2054,7 @@ footer p {
 }
 
 .goal-item strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 11px;
 }
 
@@ -2001,7 +2069,7 @@ footer p {
 .goal-progress div {
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 @media (max-width: 950px) {
@@ -2052,7 +2120,7 @@ footer p {
 .dashboard-layout {
   min-height: 100vh;
   display: flex;
-  background: #0b0f14;
+  background: var(--color-ink);
 }
 
 .dashboard-sidebar {
@@ -2127,12 +2195,12 @@ footer p {
 }
 
 .dashboard-nav-link:hover {
-  color: #f8fafc;
+  color: var(--color-chalk);
   background: #121921;
 }
 
 .dashboard-nav-link.active {
-  color: #f8fafc;
+  color: var(--color-chalk);
   background: #151d25;
 }
 
@@ -2148,7 +2216,7 @@ footer p {
 }
 
 .dashboard-nav-link.active .nav-link-indicator {
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .dashboard-sidebar-bottom {
@@ -2169,7 +2237,7 @@ footer p {
 }
 
 .back-to-site:hover {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .dashboard-content {
@@ -2189,7 +2257,7 @@ footer p {
   padding: 0 35px;
 
   border-bottom: 1px solid #202a34;
-  background: #0b0f14;
+  background: var(--color-ink);
 }
 
 .dashboard-topbar-label {
@@ -2216,8 +2284,8 @@ footer p {
 
   border-radius: 50%;
 
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 12px;
   font-weight: 800;
@@ -2230,7 +2298,7 @@ footer p {
 }
 
 .user-info strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 10px;
 }
 
@@ -2291,7 +2359,7 @@ footer p {
   }
 
   .dashboard-nav-link.active::before {
-    color: #a3ff12;
+    color: var(--color-amber);
   }
 
   .nav-link-indicator {
@@ -2338,7 +2406,7 @@ footer p {
 }
 
 .workout-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .workout-header > div:first-child > p:last-child {
@@ -2367,7 +2435,7 @@ footer p {
 .workout-summary strong {
   display: block;
   margin: 15px 0;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 38px;
   letter-spacing: -2px;
 }
@@ -2383,7 +2451,7 @@ footer p {
 .workout-progress-track div {
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
   transition: width 0.3s ease;
 }
 
@@ -2421,7 +2489,7 @@ footer p {
 
 .workout-meta strong {
   margin-top: 8px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 14px;
 }
 
@@ -2482,7 +2550,7 @@ footer p {
 }
 
 .exercise-category {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 1.2px;
@@ -2490,7 +2558,7 @@ footer p {
 
 .exercise-title-row h3 {
   margin: 7px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 20px;
   letter-spacing: -0.5px;
 }
@@ -2519,7 +2587,7 @@ footer p {
   border-radius: 50%;
 
   background: transparent;
-  color: #a3ff12;
+  color: var(--color-amber);
 
   font-family: inherit;
   font-size: 22px;
@@ -2544,7 +2612,7 @@ footer p {
 /* Empty / unchecked state */
 
 .exercise-check:hover {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
   transform: scale(1.05);
 }
 
@@ -2553,7 +2621,7 @@ footer p {
 }
 
 .exercise-check:focus-visible {
-  outline: 2px solid #a3ff12;
+  outline: 2px solid var(--color-amber);
   outline-offset: 3px;
 }
 
@@ -2563,10 +2631,10 @@ footer p {
    ========================================================= */
 
 .exercise-check.is-completed {
-  background: #a3ff12 !important;
-  border-color: #a3ff12 !important;
+  background: var(--color-amber) !important;
+  border-color: var(--color-amber) !important;
 
-  color: #0b0f14 !important;
+  color: var(--color-ink) !important;
 
   opacity: 1 !important;
 
@@ -2599,7 +2667,7 @@ footer p {
   width: 100%;
   height: 100%;
 
-  color: #0b0f14 !important;
+  color: var(--color-ink) !important;
 
   font-family: Arial, sans-serif;
   font-size: 22px;
@@ -2642,9 +2710,9 @@ footer p {
 /* Completed exercise card */
 
 .exercise-card.completed .exercise-check {
-  background: #a3ff12;
-  border-color: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  border-color: var(--color-amber);
+  color: var(--color-ink);
 }
 
 
@@ -2708,8 +2776,8 @@ footer p {
 
   border-radius: 50%;
 
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 20px;
   font-weight: 800;
@@ -2805,7 +2873,7 @@ footer p {
 }
 
 .ai-plan-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .ai-plan-header > div:first-child > p:last-child {
@@ -2874,13 +2942,13 @@ footer p {
   border: 1px solid #27303a;
   border-radius: 8px;
   outline: none;
-  background: #0b0f14;
-  color: #f8fafc;
+  background: var(--color-ink);
+  color: var(--color-chalk);
   font-size: 12px;
 }
 
 .ai-profile-form select:focus {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
 }
 
 .ai-profile-form .primary-button {
@@ -2915,7 +2983,7 @@ footer p {
 
 .plan-summary strong {
   margin-top: 7px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 11px;
 }
 
@@ -2948,7 +3016,7 @@ footer p {
 }
 
 .generated-plan-item > span:first-child {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 9px;
   font-weight: 800;
 }
@@ -2960,7 +3028,7 @@ footer p {
 }
 
 .generated-plan-item strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 12px;
 }
 
@@ -2989,7 +3057,7 @@ footer p {
 }
 
 .plan-generated-message span {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-weight: 800;
 }
 
@@ -3068,7 +3136,7 @@ footer p {
 }
 
 .progress-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .progress-header > div:first-child > p:last-child {
@@ -3096,7 +3164,7 @@ footer p {
 .progress-score-card strong {
   display: block;
   margin: 10px 0 5px;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 48px;
   letter-spacing: -3px;
 }
@@ -3108,7 +3176,7 @@ footer p {
 }
 
 .score-change span {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
 }
 
@@ -3143,7 +3211,7 @@ footer p {
 .progress-stats strong {
   display: block;
   margin-top: 14px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 25px;
 }
 
@@ -3175,7 +3243,7 @@ footer p {
 
 .progress-card-heading h2 {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 24px;
   letter-spacing: -1px;
 }
@@ -3231,7 +3299,7 @@ footer p {
 }
 
 .activity-bar.active {
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .activity-column > span {
@@ -3261,7 +3329,7 @@ footer p {
 }
 
 .activity-summary strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 15px;
 }
 
@@ -3290,7 +3358,7 @@ footer p {
 }
 
 .progress-goal-top strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 10px;
 }
 
@@ -3305,7 +3373,7 @@ footer p {
 .progress-goal-track div {
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .progress-goal p {
@@ -3332,9 +3400,9 @@ footer p {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 1px solid #a3ff12;
+  border: 1px solid var(--color-amber);
   border-radius: 10px;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 11px;
   font-weight: 800;
 }
@@ -3345,7 +3413,7 @@ footer p {
 
 .progress-insight h2 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 21px;
 }
 
@@ -3402,7 +3470,7 @@ footer p {
 }
 
 .milestone-status.completed {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .milestone-status.in-progress {
@@ -3415,7 +3483,7 @@ footer p {
 
 .milestone-card h3 {
   margin: 30px 0 8px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 16px;
 }
 
@@ -3503,7 +3571,7 @@ footer p {
 }
 
 .goals-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .goals-header > div:first-child > p:last-child {
@@ -3531,7 +3599,7 @@ footer p {
 .goal-score-card strong {
   display: block;
   margin: 12px 0;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 42px;
   letter-spacing: -2px;
 }
@@ -3548,7 +3616,7 @@ footer p {
   width: 80%;
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .goal-score-card p {
@@ -3597,7 +3665,7 @@ footer p {
 }
 
 .goal-option.selected {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
   background: #10170e;
 }
 
@@ -3618,14 +3686,14 @@ footer p {
   border: 1px solid #334155;
   border-radius: 50%;
 
-  color: #0b0f14;
+  color: var(--color-ink);
   font-size: 11px;
   font-weight: 800;
 }
 
 .goal-option.selected .goal-option-radio {
-  border-color: #a3ff12;
-  background: #a3ff12;
+  border-color: var(--color-amber);
+  background: var(--color-amber);
 }
 
 .goal-option-number {
@@ -3636,7 +3704,7 @@ footer p {
 
 .goal-option h3 {
   margin: 55px 0 10px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 16px;
 }
 
@@ -3682,7 +3750,7 @@ footer p {
 
 .goal-target-heading h3 {
   margin: 10px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 24px;
   letter-spacing: -1px;
 }
@@ -3696,7 +3764,7 @@ footer p {
 .goal-target-card input[type='range'] {
   width: 100%;
   margin-top: 35px;
-  accent-color: #a3ff12;
+  accent-color: var(--color-amber);
   cursor: pointer;
 }
 
@@ -3734,7 +3802,7 @@ footer p {
 
 .goal-summary h2 {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 24px;
   letter-spacing: -1px;
 }
@@ -3758,7 +3826,7 @@ footer p {
 }
 
 .goal-summary-values strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 13px;
 }
 
@@ -3777,7 +3845,7 @@ footer p {
 }
 
 .goals-saved-message span {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-weight: 800;
 }
 
@@ -3845,7 +3913,7 @@ footer p {
 }
 
 .nutrition-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .nutrition-header > div:first-child > p:last-child {
@@ -3873,7 +3941,7 @@ footer p {
 .nutrition-calorie-card strong {
   display: block;
   margin-top: 10px;
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 40px;
   letter-spacing: -2px;
 }
@@ -3895,7 +3963,7 @@ footer p {
 .nutrition-progress-track div {
   height: 100%;
   border-radius: inherit;
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .nutrition-calorie-card small {
@@ -3930,7 +3998,7 @@ footer p {
 .nutrition-macros strong {
   display: block;
   margin-top: 13px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 24px;
 }
 
@@ -3962,7 +4030,7 @@ footer p {
 
 .nutrition-card-heading h2 {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 24px;
   letter-spacing: -1px;
 }
@@ -4014,16 +4082,16 @@ footer p {
   border-radius: 50%;
 
   background: transparent;
-  color: #a3ff12;
+  color: var(--color-amber);
 
   font-size: 11px;
   font-weight: 800;
 }
 
 .meal-item.completed .meal-check {
-  border-color: #a3ff12;
-  background: #a3ff12;
-  color: #0b0f14;
+  border-color: var(--color-amber);
+  background: var(--color-amber);
+  color: var(--color-ink);
 }
 
 .meal-info {
@@ -4033,14 +4101,14 @@ footer p {
 }
 
 .meal-info span {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 7px;
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 .meal-info strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 12px;
 }
 
@@ -4068,7 +4136,7 @@ footer p {
 }
 
 .water-count {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 12px;
   font-weight: 700;
 }
@@ -4095,7 +4163,7 @@ footer p {
 }
 
 .water-circle strong {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 30px;
 }
 
@@ -4122,14 +4190,14 @@ footer p {
   border-radius: 50%;
 
   background: transparent;
-  color: #f8fafc;
+  color: var(--color-chalk);
 
   font-size: 18px;
 }
 
 .water-controls button:hover {
-  border-color: #a3ff12;
-  color: #a3ff12;
+  border-color: var(--color-amber);
+  color: var(--color-amber);
 }
 
 .water-controls span {
@@ -4205,7 +4273,7 @@ footer p {
 
 .wellness-card h3 {
   margin: 0 0 6px;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 13px;
 }
 
@@ -4222,7 +4290,7 @@ footer p {
 }
 
 .wellness-card.completed > strong {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .nutrition-ai-insight {
@@ -4249,10 +4317,10 @@ footer p {
 
   flex-shrink: 0;
 
-  border: 1px solid #a3ff12;
+  border: 1px solid var(--color-amber);
   border-radius: 10px;
 
-  color: #a3ff12;
+  color: var(--color-amber);
 
   font-size: 11px;
   font-weight: 800;
@@ -4264,7 +4332,7 @@ footer p {
 
 .nutrition-ai-insight h2 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 21px;
 }
 
@@ -4345,7 +4413,7 @@ footer p {
 }
 
 .assistant-header h1 span {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .assistant-header > div:first-child > p:last-child {
@@ -4390,7 +4458,7 @@ footer p {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #a3ff12;
+  background: var(--color-amber);
   box-shadow: 0 0 10px rgba(163, 255, 18, 0.5);
 }
 
@@ -4436,10 +4504,10 @@ footer p {
   align-items: center;
   justify-content: center;
 
-  border: 1px solid #a3ff12;
+  border: 1px solid var(--color-amber);
   border-radius: 8px;
 
-  color: #a3ff12;
+  color: var(--color-amber);
 
   font-size: 9px;
   font-weight: 800;
@@ -4451,7 +4519,7 @@ footer p {
 }
 
 .assistant-chat-header strong {
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 11px;
 }
 
@@ -4479,7 +4547,7 @@ footer p {
 
   border-radius: 50%;
 
-  background: #a3ff12;
+  background: var(--color-amber);
 }
 
 .assistant-messages {
@@ -4514,7 +4582,7 @@ footer p {
 }
 
 .assistant-message.ai .message-label {
-  color: #a3ff12;
+  color: var(--color-amber);
 }
 
 .assistant-message p {
@@ -4559,8 +4627,8 @@ footer p {
 
   outline: none;
 
-  background: #0b0f14;
-  color: #f8fafc;
+  background: var(--color-ink);
+  color: var(--color-chalk);
 
   font-size: 11px;
 }
@@ -4570,7 +4638,7 @@ footer p {
 }
 
 .assistant-input-area input:focus {
-  border-color: #a3ff12;
+  border-color: var(--color-amber);
 }
 
 .assistant-input-area button {
@@ -4579,8 +4647,8 @@ footer p {
   border: 0;
   border-radius: 8px;
 
-  background: #a3ff12;
-  color: #0b0f14;
+  background: var(--color-amber);
+  color: var(--color-ink);
 
   font-size: 20px;
   font-weight: 700;
@@ -4601,7 +4669,7 @@ footer p {
 
 .assistant-side-panel h2 {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--color-chalk);
   font-size: 20px;
   letter-spacing: -0.5px;
 }
@@ -4638,11 +4706,11 @@ footer p {
 .suggestion-list button:hover {
   border-color: #334155;
   background: #111820;
-  color: #f8fafc;
+  color: var(--color-chalk);
 }
 
 .suggestion-list button span {
-  color: #a3ff12;
+  color: var(--color-amber);
   font-size: 14px;
   line-height: 10px;
 }
@@ -4756,3 +4824,202 @@ footer p {
   }
 }
 
+
+
+/* ================================================================
+   FITZONE AI — PRODUCT POLISH / HIGH-TECH FITNESS SYSTEM
+   ================================================================ */
+:root {
+  --fz-panel: #0f151b;
+  --fz-panel-2: #121b23;
+  --fz-line: rgba(244,242,237,.09);
+  --fz-muted: #7f8b98;
+  --fz-green: #54c39b;
+  --fz-shadow: 0 24px 70px rgba(0,0,0,.28);
+}
+
+.dashboard-outlet { min-height: calc(100vh - 76px); }
+.dashboard-outlet > * { animation: fz-page-in .32s ease both; }
+@keyframes fz-page-in { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+
+/* AI PLAN */
+.ai-plan-page, .workout-page { max-width: 1180px; margin: 0 auto; padding: 48px 34px 80px; }
+.ai-plan-hero { display:grid; grid-template-columns: 1.2fr .8fr; gap:22px; align-items:stretch; }
+.ai-plan-hero > div:first-child { padding: 34px 0; }
+.ai-plan-hero h1 { font-size: clamp(46px,6vw,78px); line-height:.98; letter-spacing:-3px; margin:0; }
+.ai-plan-hero h1 span { color:var(--color-amber); }
+.ai-plan-hero p:not(.eyebrow) { max-width:690px; color:var(--fz-muted); line-height:1.8; font-size:16px; margin:24px 0 0; }
+.ai-plan-actions { display:flex; gap:12px; margin-top:28px; flex-wrap:wrap; }
+.ai-plan-intelligence-card { padding:30px; border:1px solid var(--fz-line); border-radius:22px; background:linear-gradient(145deg,#121b23,#0c1116); box-shadow:var(--fz-shadow); }
+.ai-plan-card-label, .ai-plan-metrics span, .ai-plan-event span { display:block; color:var(--fz-muted); font-size:10px; letter-spacing:1.8px; font-weight:800; }
+.ai-plan-intelligence-card > strong { display:block; margin-top:22px; font-size:28px; text-transform:capitalize; }
+.ai-plan-intelligence-card > p { margin:10px 0 25px; color:var(--fz-muted); line-height:1.65; }
+.ai-plan-metrics { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.ai-plan-metrics div { padding:14px; border:1px solid var(--fz-line); border-radius:12px; background:#0b1015; }
+.ai-plan-metrics b { display:block; margin-top:6px; font-size:13px; }
+.ai-plan-profile-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:18px; }
+.ai-plan-profile-grid article { padding:20px; border:1px solid var(--fz-line); border-radius:16px; background:var(--fz-panel); }
+.ai-plan-profile-grid span { font-size:10px; color:var(--fz-muted); letter-spacing:1.5px; font-weight:800; }
+.ai-plan-profile-grid strong { display:block; margin:9px 0 6px; font-size:19px; }
+.ai-plan-profile-grid p { margin:0; color:var(--fz-muted); font-size:12px; line-height:1.5; }
+.ai-plan-error, .workout-error { margin-top:18px; padding:13px 15px; border:1px solid rgba(196,72,61,.35); background:rgba(196,72,61,.08); border-radius:12px; color:#f2b0a9; }
+.ai-plan-generated { margin-top:18px; padding:28px; border:1px solid var(--fz-line); border-radius:22px; background:var(--fz-panel); box-shadow:var(--fz-shadow); }
+.ai-plan-generated-header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:1px solid var(--fz-line); padding-bottom:22px; }
+.ai-plan-generated h2 { margin:0; font-size:32px; }
+.ai-plan-generated-header p:last-child { color:var(--fz-muted); }
+.ai-plan-event { text-align:right; min-width:170px; }
+.ai-plan-event strong { display:block; margin-top:7px; color:var(--fz-green); font-size:12px; }
+.ai-plan-exercises { display:grid; gap:8px; margin-top:18px; }
+.ai-plan-exercises article { display:grid; grid-template-columns:45px 1fr auto; align-items:center; gap:15px; padding:17px; border:1px solid transparent; border-radius:14px; background:#0b1015; }
+.ai-plan-exercises article:hover { border-color:var(--fz-line); }
+.ai-plan-exercises article > span { color:var(--color-amber); font-family:var(--font-display); font-size:20px; }
+.ai-plan-exercises strong { font-size:15px; }
+.ai-plan-exercises p { margin:5px 0 0; color:var(--fz-muted); font-size:12px; }
+.ai-plan-exercises em { color:var(--fz-muted); font-size:10px; text-transform:uppercase; letter-spacing:1px; font-style:normal; }
+.ai-plan-generated-footer { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-top:20px; padding-top:20px; border-top:1px solid var(--fz-line); color:var(--fz-muted); font-size:12px; }
+
+/* WORKOUT */
+.workout-hero { display:flex; justify-content:space-between; align-items:center; gap:25px; padding:20px 0 30px; }
+.workout-hero h1 { margin:0; font-size:clamp(42px,5vw,68px); line-height:.98; letter-spacing:-2px; }
+.workout-subtitle { color:var(--fz-muted); margin:13px 0 0; }
+.workout-progress-ring { width:132px; height:132px; border-radius:50%; border:1px solid var(--fz-line); background:radial-gradient(circle at center,#17242d 0 52%,transparent 53%), conic-gradient(var(--color-amber) calc(var(--progress, 0) * 1%), #202a34 0); display:flex; flex-direction:column; align-items:center; justify-content:center; flex:none; }
+.workout-progress-ring strong { font-size:29px; }
+.workout-progress-ring span { color:var(--fz-muted); font-size:9px; letter-spacing:1.5px; }
+.workout-session-bar { display:grid; grid-template-columns:180px 1fr 230px; gap:20px; align-items:center; padding:20px; border:1px solid var(--fz-line); border-radius:18px; background:var(--fz-panel); }
+.workout-session-bar span { display:block; color:var(--fz-muted); font-size:10px; letter-spacing:1.5px; font-weight:800; }
+.workout-session-bar strong { display:block; margin-top:6px; }
+.workout-progress-track { height:8px; background:#202a34; border-radius:20px; overflow:hidden; }
+.workout-progress-track i { display:block; height:100%; background:var(--color-amber); border-radius:inherit; }
+.workout-session-note { color:var(--fz-muted); font-size:12px; text-align:right; }
+.workout-switcher { margin-top:18px; padding:22px; border:1px solid var(--fz-line); border-radius:18px; background:var(--fz-panel); }
+.workout-switcher h2 { margin:0; }
+.workout-switcher > div:last-child { display:flex; gap:8px; flex-wrap:wrap; margin-top:15px; }
+.workout-switcher button { padding:12px 14px; text-align:left; border:1px solid var(--fz-line); border-radius:12px; background:#0b1015; color:var(--color-chalk); }
+.workout-switcher button.active { border-color:var(--color-amber); }
+.workout-switcher button span, .workout-switcher button strong { display:block; }
+.workout-switcher button span { color:var(--fz-muted); font-size:9px; text-transform:uppercase; letter-spacing:1px; }
+.workout-switcher button strong { margin-top:5px; font-size:12px; }
+.workout-exercise-list { margin-top:38px; }
+.workout-exercise-list .section-heading { margin-bottom:18px; }
+.workout-exercise-card { display:grid; grid-template-columns:54px 1fr auto; align-items:center; gap:18px; padding:20px; margin-bottom:9px; border:1px solid var(--fz-line); border-radius:16px; background:var(--fz-panel); transition:.2s ease; }
+.workout-exercise-card:hover { transform:translateY(-2px); border-color:#3a4652; }
+.workout-exercise-card.completed { border-color:rgba(84,195,155,.28); background:linear-gradient(90deg,rgba(84,195,155,.05),var(--fz-panel)); }
+.exercise-index { font-family:var(--font-display); color:var(--color-amber); font-size:24px; }
+.exercise-type { color:var(--fz-muted); font-size:9px; letter-spacing:1.4px; font-weight:800; text-transform:uppercase; }
+.exercise-main h3 { margin:6px 0 5px; font-size:18px; }
+.exercise-main p { margin:0; color:var(--fz-muted); font-size:12px; }
+.exercise-complete { border:1px solid var(--fz-line); background:#0b1015; color:var(--color-chalk); border-radius:10px; padding:10px 14px; font-size:12px; }
+.workout-exercise-card.completed .exercise-complete { border-color:rgba(84,195,155,.4); color:var(--fz-green); }
+.workout-finish { margin-top:24px; display:flex; justify-content:space-between; align-items:center; gap:25px; padding:28px; border-radius:20px; background:linear-gradient(135deg,#141e26,#0d1217); border:1px solid var(--fz-line); }
+.workout-finish h2 { margin:0; font-size:29px; }
+.workout-finish p:last-child { color:var(--fz-muted); max-width:650px; line-height:1.6; }
+.workout-finish > div:last-child { display:flex; gap:9px; flex-wrap:wrap; justify-content:flex-end; }
+
+/* ASSISTANT */
+.assistant-header-actions { display:flex; align-items:center; gap:10px; }
+.assistant-clear { border:1px solid var(--fz-line); background:transparent; color:var(--fz-muted); padding:8px 11px; border-radius:9px; font-size:10px; }
+.assistant-clear:hover { color:var(--color-chalk); border-color:#46515c; }
+.assistant-message p { white-space:pre-wrap; }
+
+@media (max-width: 900px) {
+  .ai-plan-hero { grid-template-columns:1fr; }
+  .ai-plan-profile-grid { grid-template-columns:1fr 1fr; }
+  .workout-session-bar { grid-template-columns:1fr; }
+  .workout-session-note { text-align:left; }
+  .workout-finish { flex-direction:column; align-items:flex-start; }
+  .workout-finish > div:last-child { justify-content:flex-start; }
+}
+@media (max-width: 600px) {
+  .ai-plan-page, .workout-page { padding:30px 18px 60px; }
+  .ai-plan-profile-grid { grid-template-columns:1fr; }
+  .ai-plan-generated-header { flex-direction:column; }
+  .ai-plan-event { text-align:left; }
+  .ai-plan-generated-footer { flex-direction:column; align-items:flex-start; }
+  .workout-hero { align-items:flex-start; }
+  .workout-progress-ring { width:92px; height:92px; }
+  .workout-progress-ring strong { font-size:22px; }
+  .workout-exercise-card { grid-template-columns:35px 1fr; }
+  .exercise-complete { grid-column:2; justify-self:start; }
+}
+
+/* NUTRITION FORM / POLISH */
+.nutrition-error {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid rgba(196, 72, 61, 0.45);
+  border-radius: 12px;
+  background: rgba(196, 72, 61, 0.08);
+  color: #e8b0aa;
+  font-size: 12px;
+}
+
+.nutrition-error span { color: #b9b8b3; }
+
+.nutrition-empty-state {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 26px;
+  padding: 22px;
+  border: 1px dashed #2c3440;
+  border-radius: 12px;
+  background: #0b1117;
+}
+
+.nutrition-empty-state > span {
+  color: var(--color-amber);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.nutrition-empty-state strong { color: var(--color-chalk); font-size: 13px; }
+.nutrition-empty-state p { margin: 6px 0 0; color: #64748b; font-size: 11px; line-height: 1.6; }
+
+.nutrition-target-card h2 { margin: 8px 0 10px; color: var(--color-chalk); font-size: 28px; }
+.nutrition-target-card > p:not(.eyebrow):not(.nutrition-note) { color: #64748b; font-size: 11px; line-height: 1.7; }
+
+.target-list { display: grid; gap: 10px; margin-top: 24px; }
+.target-list div { display: flex; justify-content: space-between; gap: 15px; padding: 12px 0; border-bottom: 1px solid #202a34; }
+.target-list span { color: #64748b; font-size: 10px; }
+.target-list strong { color: var(--color-chalk); font-size: 11px; }
+
+.meal-actions { display: flex; gap: 12px; margin-top: 3px; }
+.text-button { border: 0; padding: 0; background: transparent; color: #7f8996; font-size: 10px; }
+.text-button:hover { color: var(--color-amber); }
+.text-button.danger:hover { color: #d8756d; }
+
+.nutrition-form-card { margin-top: 15px; }
+.meal-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.meal-form-field { min-width: 0; }
+.meal-form-field-wide { grid-column: span 2; }
+.meal-form-field label { display: block; margin-bottom: 8px; color: #8993a0; font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.meal-form-field input, .meal-form-field select { width: 100%; min-height: 46px; border: 1px solid #2a3440; border-radius: 9px; outline: none; background: #0a1016; color: var(--color-chalk); padding: 0 13px; font-size: 12px; transition: border-color .2s ease, box-shadow .2s ease; }
+.meal-form-field input::placeholder { color: #475569; }
+.meal-form-field input:focus, .meal-form-field select:focus { border-color: var(--color-amber); box-shadow: 0 0 0 3px rgba(227,155,60,.10); }
+.number-input-wrap { position: relative; }
+.number-input-wrap input { padding-right: 48px; }
+.number-input-wrap span { position: absolute; top: 50%; right: 13px; transform: translateY(-50%); color: #596575; font-size: 10px; font-weight: 700; }
+.meal-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 4px; }
+.primary-button:disabled, .secondary-button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
+.dashboard-logout { margin-top: 12px; width: 100%; border: 1px solid #27303a; border-radius: 8px; padding: 10px 12px; background: transparent; color: #7f8996; font-size: 11px; }
+.dashboard-logout:hover { border-color: #5d6875; color: var(--color-chalk); }
+
+@media (max-width: 800px) {
+  .meal-form { grid-template-columns: 1fr 1fr; }
+  .meal-form-field-wide { grid-column: 1 / -1; }
+  .meal-form-actions { grid-column: 1 / -1; }
+}
+
+@media (max-width: 600px) {
+  .nutrition-error { align-items: flex-start; flex-direction: column; }
+  .meal-form { grid-template-columns: 1fr; }
+  .meal-form-field-wide, .meal-form-actions { grid-column: 1; }
+  .meal-form-actions { justify-content: stretch; }
+  .meal-form-actions .primary-button { width: 100%; }
+  .meal-item { grid-template-columns: 28px 1fr; }
+  .meal-macros { grid-column: 2; flex-wrap: wrap; }
+}

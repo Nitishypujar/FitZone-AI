@@ -1,0 +1,3521 @@
+const activityProfileRouter = require("./services/ml/activityProfileRouter");
+const express = require('express')
+
+const intelligenceRouter = require('./services/intelligence/intelligenceRouter')
+const cors = require('cors')
+const helmet = require('helmet')
+const { corsOptions, globalLimiter, authLimiter, assistantLimiter, generationLimiter, mlTrainingLimiter, helmetOptions } = require('./middleware/security')
+require('dotenv').config()
+const { calculateNutritionTargets } = require('./services/nutritionCalculator')
+const { buildIntelligenceSnapshot } = require('./services/intelligence/intelligenceService')
+const { generateNutritionInsight } = require('./services/nutritionInsights')
+const { buildFitnessContext } = require('./services/fitnessContext')
+const { calculateWeeklyWorkoutProgress } = require('./services/weeklyProgress')
+const {
+  generateAssistantResponse,
+} = require('./services/assistantService')
+
+const {
+  createRecommendationEvent,
+  updateRecommendationEvent,
+  getRecommendationEvents,
+} = require('./services/recommendationEvents')
+
+const {
+  validateModelFile,
+  prepareFeatures
+} = require("./services/ml/activityProfileService");
+
+// ADAPTIVE RECOMMENDATION ENGINE
+const {
+  getProgressData,
+} = require('./services/ai/tools/progressTool')
+
+const {
+  getTodayNutrition,
+} = require('./services/ai/tools/nutritionTool')
+
+const supabase = require('./supabase')
+const {
+  isNonEmptyString,
+  isValidEmail,
+  isValidInteger,
+  isValidNumber,
+  isValidUuid,
+  isValidPositiveIntegerId,
+  isValidBoolean,
+  isAllowedValue,
+  requireBodyObject,
+  rejectUnknownFields,
+} = require('./middleware/validation')
+const { generatePersonalizedWorkout } = require('./services/ai/personalizedWorkoutEngine')
+const { trainCompletionModelFromHistory } = require('./services/ml/trainFromHistory')
+
+const { buildUserState } = require('./services/userState')
+const app = express()
+app.locals.supabase = supabase;
+
+const PORT = process.env.PORT || 5000
+
+app.disable('x-powered-by')
+app.set('trust proxy', 1)
+app.use(helmet(helmetOptions))
+app.use(cors(corsOptions))
+app.use(globalLimiter)
+app.use(express.json({ limit: '256kb' }))
+app.use(express.urlencoded({ extended: false, limit: '64kb' }))
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store')
+  next()
+})
+
+// ============================================
+// AUTHENTICATION HELPER
+// ============================================
+
+async function authenticateUser(req, res) {
+  const authHeader = req.headers.authorization
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({
+      status: 'error',
+      message: 'Authentication token is required',
+    })
+
+    return null
+  }
+
+  const accessToken = authHeader.replace('Bearer ', '').trim()
+
+  if (!accessToken) {
+    res.status(401).json({
+      status: 'error',
+      message: 'Authentication token is required',
+    })
+
+    return null
+  }
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(accessToken)
+
+    if (userError || !user) {
+      res.status(401).json({
+        status: 'error',
+        message: 'Invalid or expired authentication token',
+      })
+
+      return null
+    }
+
+    return user
+  } catch (error) {
+    console.error('Authentication error:', error)
+
+    res.status(401).json({
+      status: 'error',
+      message: 'Authentication failed',
+    })
+
+    return null
+  }
+}
+
+// ============================================
+// ROOT API
+// ============================================
+
+app.get('/', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'FitZone AI backend is running',
+  })
+})
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'FitZone AI backend is healthy',
+  })
+})
+
+// ============================================
+// ML MODEL TRAINING (from real historical outcomes)
+// ============================================
+
+app.post('/api/ml/train', mlTrainingLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const result = await trainCompletionModelFromHistory()
+    res.json({ status: 'success', ...result })
+  } catch (error) {
+    console.error('ML training error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Unable to train the completion model.',
+    })
+  }
+})
+
+// ============================================
+// DATABASE TEST
+// ============================================
+
+app.get('/api/db-test', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Database test error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Database connection failed',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Database connection successful',
+    })
+  } catch (error) {
+    console.error('Database test exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Database test failed',
+    })
+  }
+})
+
+// ============================================
+// REGISTER API
+// ============================================
+
+app.post('/api/register', authLimiter, async (req, res) => {
+  try {
+    const {
+      email,
+      password,
+      full_name,
+      age,
+      height_cm,
+      weight_kg,
+      fitness_level,
+      primary_goal,
+      workout_days_per_week,
+      preferred_workout_duration,
+    } = req.body
+
+    if (!isValidEmail(email) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Enter a valid email and a password between 8 and 128 characters.',
+      })
+    }
+
+    if (full_name !== undefined && full_name !== null && !isNonEmptyString(full_name, 120)) {
+      return res.status(400).json({ status: 'error', message: 'Name must be 120 characters or fewer.' })
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.error('Registration error:', error)
+
+      return res.status(400).json({
+        status: 'error',
+        message: error.message,
+      })
+    }
+
+    if (!data.user) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Unable to create user',
+      })
+    }
+
+    const userId = data.user.id
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        full_name: full_name || null,
+        age: age || null,
+        height_cm: height_cm || null,
+        weight_kg: weight_kg || null,
+        fitness_level: fitness_level || 'beginner',
+        primary_goal: primary_goal || 'General Fitness',
+        workout_days_per_week: workout_days_per_week || 3,
+        preferred_workout_duration:
+          preferred_workout_duration || 45,
+      })
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'User created but profile creation failed',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Registration successful',
+      user: data.user,
+      session: data.session,
+    })
+  } catch (error) {
+    console.error('Registration exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Registration failed',
+    })
+  }
+})
+
+// ============================================
+// LOGIN API
+// ============================================
+
+app.post('/api/login', authLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body
+
+    if (!isValidEmail(email) || typeof password !== 'string' || password.length < 1 || password.length > 128) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid login details.',
+      })
+    }
+
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+    if (error) {
+      console.error('Login error:', error)
+
+      return res.status(401).json({
+        status: 'error',
+        message: error.message,
+      })
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Login successful',
+      user: data.user,
+      session: data.session,
+    })
+  } catch (error) {
+    console.error('Login exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Login failed',
+    })
+  }
+})
+
+// ============================================
+// PROFILE API - GET
+// ============================================
+
+app.get('/api/profile', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Profile fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch profile',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      profile: data,
+    })
+  } catch (error) {
+    console.error('Profile fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Profile fetch failed',
+    })
+  }
+})
+
+// ============================================
+// PROFILE API - UPDATE
+// ============================================
+app.put('/api/profile', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'full_name',
+      'age',
+      'height_cm',
+      'weight_kg',
+      'fitness_level',
+      'primary_goal',
+      'workout_days_per_week',
+      'preferred_workout_duration',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported fields',
+        fields: unknownFields,
+      })
+    }
+
+    const {
+      full_name,
+      age,
+      height_cm,
+      weight_kg,
+      fitness_level,
+      primary_goal,
+      workout_days_per_week,
+      preferred_workout_duration,
+    } = req.body
+
+    if (
+      full_name !== undefined &&
+      full_name !== null &&
+      !isNonEmptyString(full_name, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'full_name must be a non-empty string with a maximum length of 100 characters',
+      })
+    }
+
+    if (
+      age !== undefined &&
+      age !== null &&
+      !isValidInteger(age, 13, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'age must be an integer between 13 and 100',
+      })
+    }
+
+    if (
+      height_cm !== undefined &&
+      height_cm !== null &&
+      !isValidNumber(height_cm, 50, 250)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'height_cm must be a number between 50 and 250',
+      })
+    }
+
+    if (
+      weight_kg !== undefined &&
+      weight_kg !== null &&
+      !isValidNumber(weight_kg, 20, 300)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'weight_kg must be a number between 20 and 300',
+      })
+    }
+
+    const allowedFitnessLevels = [
+      'beginner',
+      'intermediate',
+      'advanced',
+    ]
+
+    if (
+      fitness_level !== undefined &&
+      fitness_level !== null &&
+      !isAllowedValue(
+        fitness_level,
+        allowedFitnessLevels,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'fitness_level contains an invalid value',
+      })
+    }
+
+    if (
+      primary_goal !== undefined &&
+      primary_goal !== null &&
+      !isNonEmptyString(primary_goal, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'primary_goal must be a non-empty string with a maximum length of 100 characters',
+      })
+    }
+
+    if (
+      workout_days_per_week !== undefined &&
+      workout_days_per_week !== null &&
+      !isValidInteger(
+        workout_days_per_week,
+        0,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'workout_days_per_week must be an integer between 0 and 7',
+      })
+    }
+
+    if (
+      preferred_workout_duration !== undefined &&
+      preferred_workout_duration !== null &&
+      !isValidInteger(
+        preferred_workout_duration,
+        5,
+        300,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'preferred_workout_duration must be an integer between 5 and 300 minutes',
+      })
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('profiles')
+      .update({
+        full_name,
+        age,
+        height_cm,
+        weight_kg,
+        fitness_level,
+        primary_goal,
+        workout_days_per_week,
+        preferred_workout_duration,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Profile update error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to update profile',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      profile: data,
+    })
+  } catch (error) {
+    console.error('Profile update exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Profile update failed',
+    })
+  }
+})
+// ============================================
+// WORKOUT GENERATION API
+// ============================================
+
+app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  if (
+    req.body !== undefined &&
+    req.body !== null &&
+    (
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body) ||
+      Object.keys(req.body).length > 0
+    )
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout generation does not accept request body fields',
+    })
+  }
+
+  try {
+    const intelligence = await buildIntelligenceSnapshot(supabase, user.id)
+    const userState = intelligence.user_state
+    const recommendation = intelligence.next_best_action
+    const profile = userState.profile
+
+    const generatedWorkout = generatePersonalizedWorkout({
+      profile,
+      goalState: userState.goal_state,
+      weeklyProgress: {
+        weekly_completed_workouts: userState.goal_state.current_weekly_workouts,
+        weekly_active_minutes: userState.goal_state.current_weekly_active_minutes,
+      },
+      trainingLoad: {
+        level: recommendation?.action === 'recovery' ? 'high' : '',
+      },
+      recommendation,
+    })
+
+    const today = new Date().toISOString().split('T')[0]
+
+    const { data: workout, error: workoutError } = await supabase
+      .from('workouts')
+      .insert({
+        user_id: user.id,
+        workout_name: generatedWorkout.workout_name,
+        workout_type: generatedWorkout.workout_type,
+        duration_minutes: generatedWorkout.duration_minutes,
+        difficulty: generatedWorkout.difficulty,
+        exercises: generatedWorkout.exercises,
+        scheduled_date: today,
+        completed: false,
+      })
+      .select()
+      .single()
+
+    if (workoutError) {
+      console.error('Generated workout save error:', workoutError)
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to save generated workout',
+      })
+    }
+
+    // The recommendation event is created after the workout exists so the
+    // event can point to the exact generated workout. This removes the old
+    // snapshot-based guesswork used during completion.
+    const eventPayload = {
+      recommendation_type: recommendation?.action || 'follow-planned-workout',
+      recommendation_action: recommendation?.action || 'follow-planned-workout',
+      recommendation: recommendation?.reason || 'Follow your personalized FitZone plan.',
+      reason: recommendation?.reason || null,
+      context_snapshot: {
+        ...userState,
+        recommended_workout_id: workout.id,
+        recommendation_intelligence: recommendation || null,
+      },
+    }
+
+    let recommendationEvent = null
+    try {
+      recommendationEvent = await createRecommendationEvent(
+        supabase,
+        user.id,
+        eventPayload,
+      )
+    } catch (eventError) {
+      // A pending uniqueness constraint can mean another request already
+      // created the same recommendation. Recover that event and attach the
+      // newly generated workout to it rather than creating duplicate history.
+      if (String(eventError.message || '').includes('recommendation_events_pending_unique_idx')) {
+        const { data: existingEvent, error: existingError } = await supabase
+          .from('recommendation_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('recommendation_action', eventPayload.recommendation_action)
+          .is('accepted', null)
+          .is('completed', null)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (existingError) throw new Error(existingError.message)
+        recommendationEvent = existingEvent || null
+      } else {
+        console.error('Recommendation event creation error:', eventError)
+      }
+    }
+
+    if (recommendationEvent?.id) {
+      const { data: linkedEvent, error: linkError } = await supabase
+        .from('recommendation_events')
+        .update({
+          workout_id: workout.id,
+          context_snapshot: {
+            ...(recommendationEvent.context_snapshot || {}),
+            ...eventPayload.context_snapshot,
+          },
+        })
+        .eq('id', recommendationEvent.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (linkError) {
+        // The migration is required for exact identity. Do not fail the
+        // workout itself if an older database has not been migrated yet.
+        console.error('Recommendation workout link error:', linkError)
+      } else {
+        recommendationEvent = linkedEvent
+      }
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Personalized workout generated successfully',
+      workout,
+      recommendation_event: recommendationEvent,
+      event_id: recommendationEvent?.id || null,
+      metadata: generatedWorkout.personalization,
+      intelligence: {
+        action: recommendation?.action || null,
+        reason: recommendation?.reason || null,
+        effective_goal: profile?.primary_goal || 'General Fitness',
+        ml_enabled: recommendation?.ml_enabled === true,
+        ml_source: recommendation?.ml_source || 'unavailable',
+      },
+    })
+  } catch (error) {
+    console.error('Workout generation exception:', error)
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout generation failed',
+    })
+  }
+})
+
+// ============================================
+// WORKOUTS API - CURRENT / RECOMMENDED
+// ============================================
+
+app.get('/api/workouts/current', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: event, error: eventError } = await supabase
+      .from('recommendation_events')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('completed', null)
+      .not('workout_id', 'is', null)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (eventError) {
+      console.error('Current workout recommendation lookup error:', eventError)
+    }
+
+    let workout = null
+
+    if (event?.workout_id !== null && event?.workout_id !== undefined) {
+      const result = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('id', event.workout_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (result.error) throw new Error(result.error.message)
+      workout = result.data || null
+    }
+
+    if (!workout) {
+      const today = new Date().toISOString().split('T')[0]
+      const fallback = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('completed', false)
+        .eq('scheduled_date', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (fallback.error) throw new Error(fallback.error.message)
+      workout = fallback.data || null
+    }
+
+    res.json({
+      status: 'success',
+      workout,
+      recommendation_event: event || null,
+      source: event?.workout_id ? 'recommendation-event' : 'today-fallback',
+    })
+  } catch (error) {
+    console.error('Current workout fetch error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to fetch the current workout',
+    })
+  }
+})
+
+// ============================================
+// WORKOUTS API - GET
+// ============================================
+
+app.get('/api/workouts', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('scheduled_date', {
+        ascending: true,
+      })
+      .order('created_at', {
+        ascending: false,
+      })
+
+    if (error) {
+      console.error('Workouts fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch workouts',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      workouts: data || [],
+    })
+  } catch (error) {
+    console.error('Workouts fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout fetch failed',
+    })
+  }
+})
+
+// ============================================
+// WORKOUTS API - POST
+// ============================================
+
+app.post('/api/workouts', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  if (!requireBodyObject(req, res)) {
+    return
+  }
+
+  const allowedFields = [
+    'workout_name',
+    'workout_type',
+    'duration_minutes',
+    'difficulty',
+    'scheduled_date',
+    'exercises',
+  ]
+
+  const unknownFields = rejectUnknownFields(
+    req.body,
+    allowedFields
+  )
+
+  if (unknownFields.length > 0) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Request contains unsupported fields',
+      fields: unknownFields,
+    })
+  }
+
+  const {
+    workout_name,
+    workout_type,
+    duration_minutes,
+    difficulty,
+    scheduled_date,
+    exercises,
+  } = req.body
+
+  if (!isNonEmptyString(workout_name, 150)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout name must be a non-empty string',
+    })
+  }
+
+  if (
+    workout_type !== undefined &&
+    !isNonEmptyString(workout_type, 50)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Workout type must be a non-empty string',
+    })
+  }
+
+  if (
+    duration_minutes !== undefined &&
+    !isValidInteger(duration_minutes, 1, 600)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Duration must be an integer between 1 and 600 minutes',
+    })
+  }
+
+  if (
+    difficulty !== undefined &&
+    !isAllowedValue(difficulty, [
+      'beginner',
+      'intermediate',
+      'advanced',
+    ])
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid workout difficulty',
+    })
+  }
+
+  if (
+    scheduled_date !== undefined &&
+    (
+      typeof scheduled_date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date) ||
+      Number.isNaN(
+        Date.parse(`${scheduled_date}T00:00:00Z`)
+      )
+    )
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Scheduled date must be a valid YYYY-MM-DD date',
+    })
+  }
+
+  if (
+    exercises !== undefined &&
+    !Array.isArray(exercises)
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Exercises must be an array',
+    })
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .insert({
+        user_id: user.id,
+        workout_name,
+        workout_type: workout_type || null,
+        duration_minutes: duration_minutes || null,
+        difficulty: difficulty || null,
+        scheduled_date: scheduled_date || null,
+        exercises: exercises || null,
+        completed: false,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Workout creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create workout',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Workout created successfully',
+      workout: data,
+    })
+  } catch (error) {
+    console.error('Workout creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout creation failed',
+    })
+  }
+})
+
+
+// ============================================
+// WORKOUTS API - UPDATE
+// ============================================
+
+app.put('/api/workouts/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+  const workoutId = Number(req.params.id)
+
+  if (!isValidInteger(Number(workoutId), 1)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid workout ID',
+    })
+  }
+
+  if (!requireBodyObject(req, res)) {
+    return
+  }
+
+  const allowedFields = ['completed']
+
+  const unknownFields = rejectUnknownFields(
+    req.body,
+    allowedFields
+  )
+
+  if (unknownFields.length > 0) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Request contains unsupported fields',
+      fields: unknownFields,
+    })
+  }
+
+  const { completed } = req.body
+
+  if (!isValidBoolean(completed)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Completed must be a boolean',
+    })
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .update({
+        completed,
+        completed_at: completed
+          ? new Date().toISOString()
+          : null,
+      })
+      .eq('id', workoutId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Workout update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Workout not found' })
+      }
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to update workout',
+      })
+    }
+
+    let recommendationEvent = null
+
+    if (completed === true) {
+      try {
+        const { data: exactEvent, error: exactEventError } = await supabase
+          .from('recommendation_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('workout_id', workoutId)
+          .is('completed', null)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (exactEventError) {
+          console.error('Exact recommendation event lookup error:', exactEventError)
+        }
+
+        let matchingEvent = exactEvent || null
+
+        const workoutRecommendationActions = [
+          'follow-planned-workout',
+          'progress-workout',
+          'short-easy-workout',
+          'complete-planned-workout',
+          'recovery',
+          'return-to-routine',
+          'increase-workout-consistency',
+          'fat-loss-workout',
+          'strength-workout',
+          'hypertrophy-workout',
+          'endurance-workout',
+          'full-body-workout',
+          'maintain-fitness-workout',
+          'mobility-workout',
+        ]
+
+        const { data: pendingEvents, error: recommendationError } =
+          await supabase
+            .from('recommendation_events')
+            .select('*')
+            .eq('user_id', user.id)
+            .is('completed', null)
+            .in(
+              'recommendation_action',
+              workoutRecommendationActions
+            )
+            .order('generated_at', {
+              ascending: false,
+            })
+            .limit(25)
+
+        if (recommendationError) {
+          console.error(
+            'Recommendation outcome lookup error:',
+            recommendationError
+          )
+        } else {
+          if (!matchingEvent) {
+            matchingEvent = (pendingEvents || []).find((event) => {
+              const snapshot = event?.context_snapshot || {}
+              const directId = snapshot.recommended_workout_id ?? snapshot.recommendation_workout_id
+              const nestedId = snapshot.workout_state?.current_workout?.id
+              return String(directId ?? nestedId ?? '') === String(workoutId)
+            }) || null
+          }
+
+          if (matchingEvent) {
+            const { data: updatedEvent, error: updateEventError } =
+              await supabase
+                .from('recommendation_events')
+                .update({
+                  completed: true,
+                  outcome_recorded_at: new Date().toISOString(),
+                })
+                .eq('id', matchingEvent.id)
+                .eq('user_id', user.id)
+                .select()
+                .single()
+
+            if (updateEventError) {
+              console.error(
+                'Recommendation outcome update error:',
+                updateEventError
+              )
+            } else {
+              recommendationEvent = updatedEvent
+            }
+          }
+        }
+      } catch (recommendationOutcomeError) {
+        console.error(
+          'Recommendation outcome processing error:',
+          recommendationOutcomeError
+        )
+      }
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Workout updated successfully',
+      workout: data,
+      recommendation_event: recommendationEvent,
+    })
+  } catch (error) {
+    console.error('Workout update exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout update failed',
+    })
+  }
+})
+
+// ============================================
+// WORKOUT LOGS API - GET
+// ============================================
+
+app.get('/api/workout-logs', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { workout_id } = req.query
+
+    let query = supabase
+      .from('workout_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('logged_at', {
+        ascending: false,
+      })
+
+    if (workout_id) {
+      query = query.eq('workout_id', workout_id)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Workout logs fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch workout logs',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      logs: data || [],
+    })
+  } catch (error) {
+    console.error('Workout logs fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout logs fetch failed',
+    })
+  }
+})
+
+// ============================================
+// WORKOUT LOGS API - POST
+// ============================================
+
+app.post('/api/workout-logs', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const {
+      workout_id,
+      exercise_name,
+      sets,
+      repetitions,
+      weight_kg,
+      duration_seconds,
+      completed,
+    } = req.body
+
+    const allowedFields = [
+      'workout_id',
+      'exercise_name',
+      'sets',
+      'repetitions',
+      'weight_kg',
+      'duration_seconds',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Unknown workout log field(s): ${unknownFields.join(', ')}`,
+      })
+    }
+
+    if (!isNonEmptyString(exercise_name, 150)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Exercise name is required',
+      })
+    }
+
+    if (
+      workout_id !== undefined &&
+      workout_id !== null &&
+      !isValidInteger(workout_id, 1)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Workout ID must be a valid integer',
+      })
+    }
+
+    if (
+      sets !== undefined &&
+      sets !== null &&
+      !isValidInteger(sets, 1, 100)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Sets must be an integer between 1 and 100',
+      })
+    }
+
+    if (
+      repetitions !== undefined &&
+      repetitions !== null &&
+      !isValidInteger(repetitions, 1, 1000)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Repetitions must be an integer between 1 and 1000',
+      })
+    }
+
+    if (
+      weight_kg !== undefined &&
+      weight_kg !== null &&
+      !isValidNumber(weight_kg, 0, 1000)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Weight must be a number between 0 and 1000 kg',
+      })
+    }
+
+    if (
+      duration_seconds !== undefined &&
+      duration_seconds !== null &&
+      !isValidInteger(duration_seconds, 1, 86400)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Duration must be an integer between 1 and 86400 seconds',
+      })
+    }
+
+    if (
+      completed !== undefined &&
+      !isValidBoolean(completed)
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
+      })
+    }
+
+    const payload = {
+      user_id: user.id,
+      workout_id:
+        workout_id === undefined || workout_id === null
+          ? null
+          : workout_id,
+      exercise_name: exercise_name.trim(),
+      sets:
+        sets === undefined || sets === null
+          ? null
+          : sets,
+      repetitions:
+        repetitions === undefined || repetitions === null
+          ? null
+          : repetitions,
+      weight_kg:
+        weight_kg === undefined || weight_kg === null
+          ? null
+          : weight_kg,
+      duration_seconds:
+        duration_seconds === undefined ||
+        duration_seconds === null
+          ? null
+          : duration_seconds,
+      completed:
+        completed === undefined
+          ? false
+          : completed,
+    }
+
+    const { data, error } = await supabase
+      .from('workout_logs')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Workout log creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create workout log',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Workout log created successfully',
+      log: data,
+    })
+  } catch (error) {
+    console.error('Workout log creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Workout log creation failed',
+    })
+  }
+})
+// ============================================
+// GOALS API - GET
+// ============================================
+
+app.get('/api/goals', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', {
+        ascending: false,
+      })
+
+    if (error) {
+      console.error('Goals fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch goals',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      goals: data || [],
+    })
+  } catch (error) {
+    console.error('Goals fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Goals fetch failed',
+    })
+  }
+})
+
+// ============================================
+// GOALS API - POST
+// ============================================
+
+app.post('/api/goals', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'goal_type',
+      'weekly_workout_target',
+      'weekly_active_minute_target',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported goal fields',
+      })
+    }
+
+    const {
+      goal_type,
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
+    } = req.body
+
+    if (
+      !isAllowedValue(
+        goal_type,
+        [
+          'fat-loss',
+          'weight-gain',
+          'muscle-growth',
+          'strength',
+          'endurance',
+          'general-fitness',
+          'maintain-fitness',
+          'flexibility',
+          'stamina',
+          // Legacy values remain accepted so existing users are not broken.
+          'muscle',
+          'weight-loss',
+          'fitness',
+        ],
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid goal type',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_workout_target,
+        2,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly workout target must be an integer between 2 and 7',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_active_minute_target,
+        60,
+        500,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly active minute target must be an integer between 60 and 500',
+      })
+    }
+
+    if (!isValidBoolean(completed)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
+      })
+    }
+
+    const payload = {
+      user_id: user.id,
+      goal_type,
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
+    }
+
+    const { data, error } = await supabase
+      .from('goals')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Goal creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create goal',
+      })
+    }
+
+    const { error: profileGoalError } = await supabase
+      .from('profiles')
+      .update({ primary_goal: goal_type })
+      .eq('id', user.id)
+
+    if (profileGoalError) {
+      console.error('Profile goal synchronization warning:', profileGoalError)
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Goal created successfully',
+      goal: data,
+    })
+  } catch (error) {
+    console.error('Goal creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Goal creation failed',
+    })
+  }
+})
+
+// ============================================
+// GOALS API - PUT
+// ============================================
+
+app.put('/api/goals/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const goalId = req.params.id
+
+    // goals.id is a numeric database identifier (not a UUID).
+    // Keep UUID validation for UUID-backed resources such as recommendation_events.
+    if (!isValidPositiveIntegerId(goalId)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Goal ID must be a positive integer',
+      })
+    }
+
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'goal_type',
+      'weekly_workout_target',
+      'weekly_active_minute_target',
+      'completed',
+    ]
+
+    const unknownFields = rejectUnknownFields(
+      req.body,
+      allowedFields,
+    )
+
+    if (unknownFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported goal fields',
+      })
+    }
+
+    const {
+      goal_type,
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
+    } = req.body
+
+    if (
+      !isAllowedValue(
+        goal_type,
+        [
+          'fat-loss',
+          'weight-gain',
+          'muscle-growth',
+          'strength',
+          'endurance',
+          'general-fitness',
+          'maintain-fitness',
+          'flexibility',
+          'stamina',
+          // Legacy values remain accepted so existing users are not broken.
+          'muscle',
+          'weight-loss',
+          'fitness',
+        ],
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid goal type',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_workout_target,
+        2,
+        7,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly workout target must be an integer between 2 and 7',
+      })
+    }
+
+    if (
+      !isValidInteger(
+        weekly_active_minute_target,
+        60,
+        500,
+      )
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Weekly active minute target must be an integer between 60 and 500',
+      })
+    }
+
+    if (!isValidBoolean(completed)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Completed must be a boolean',
+      })
+    }
+
+    const payload = {
+      goal_type,
+      weekly_workout_target,
+      weekly_active_minute_target,
+      completed,
+    }
+
+    const { data, error } = await supabase
+      .from('goals')
+      .update(payload)
+      .eq('id', goalId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Goal update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Goal not found' })
+      }
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to update goal',
+      })
+    }
+
+    // Keep the profile goal synchronized with the active goal so all
+    // downstream nutrition and intelligence calculations observe the same intent.
+    const { error: profileGoalError } = await supabase
+      .from('profiles')
+      .update({ primary_goal: goal_type })
+      .eq('id', user.id)
+
+    if (profileGoalError) {
+      // The goals row remains authoritative for active intelligence state.
+      // Profile synchronization is best-effort for legacy profile consumers.
+      console.error('Profile goal synchronization warning:', profileGoalError)
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Goal updated successfully',
+      goal: data,
+    })
+  } catch (error) {
+    console.error('Goal update exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Goal update failed',
+    })
+  }
+})
+
+// ============================================
+// DASHBOARD API - GET SUMMARY
+// ============================================
+
+app.get('/api/dashboard/summary', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    // Get user's workouts
+    const { data: workouts, error: workoutsError } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', user.id)
+
+    if (workoutsError) {
+      console.error('Dashboard workouts error:', workoutsError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to load workout summary',
+      })
+    }
+
+    // Get user's workout logs
+    const { data: logs, error: logsError } = await supabase
+      .from('workout_logs')
+      .select('*')
+      .eq('user_id', user.id)
+
+    if (logsError) {
+      console.error('Dashboard logs error:', logsError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to load workout log summary',
+      })
+    }
+
+    // Get user's goals
+    const { data: goals, error: goalsError } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', user.id)
+
+    if (goalsError) {
+      console.error('Dashboard goals error:', goalsError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to load goal summary',
+      })
+    }
+
+    // --------------------------------------------
+    // COMPLETED WORKOUTS
+    // --------------------------------------------
+
+    const completedWorkouts = (workouts || []).filter(
+      (workout) => workout.completed === true
+    )
+
+    // --------------------------------------------
+    // COMPLETED EXERCISES
+    // --------------------------------------------
+
+    const completedExercises = (logs || []).filter(
+      (log) => log.completed === true
+    )
+
+    // --------------------------------------------
+    // TOTAL ACTIVE MINUTES
+    // --------------------------------------------
+
+    const totalActiveMinutes = completedWorkouts.reduce(
+      (total, workout) => {
+        return total + Number(workout.duration_minutes || 0)
+      },
+      0
+    )
+
+    // --------------------------------------------
+    // CURRENT WEEK (AUTHORITATIVE)
+    // --------------------------------------------
+
+    const weeklyProgress =
+      calculateWeeklyWorkoutProgress(workouts || [])
+
+    const weeklyCompletedWorkouts = (workouts || []).filter((workout) => {
+      const completionDate = workout.completed_at
+        ? new Date(workout.completed_at)
+        : null
+
+      return Boolean(
+        workout.completed === true &&
+        completionDate &&
+        completionDate >= new Date(weeklyProgress.week_start) &&
+        completionDate < new Date(weeklyProgress.week_end)
+      )
+    })
+
+    const weeklyActiveMinutes =
+      weeklyProgress.weekly_active_minutes
+
+    // --------------------------------------------
+    // WEEKLY WORKOUT TARGET
+    // --------------------------------------------
+
+    const workoutGoal = (goals || []).find(
+      (goal) =>
+        goal.weekly_workout_target !== null &&
+        goal.weekly_workout_target !== undefined
+    )
+
+    const weeklyWorkoutTarget =
+      Number(
+        workoutGoal?.weekly_workout_target
+      ) || 7
+
+    // --------------------------------------------
+    // WEEKLY ACTIVE MINUTE TARGET
+    // --------------------------------------------
+
+    const activeMinuteGoal = (goals || []).find(
+      (goal) =>
+        goal.weekly_active_minute_target !== null &&
+        goal.weekly_active_minute_target !== undefined
+    )
+
+    const weeklyActiveMinuteTarget =
+      Number(
+        activeMinuteGoal?.weekly_active_minute_target
+      ) || 380
+
+    // --------------------------------------------
+    // RESPONSE
+    // --------------------------------------------
+
+    res.json({
+      status: 'success',
+
+      summary: {
+        total_completed_workouts:
+          completedWorkouts.length,
+
+        total_exercises_completed:
+          completedExercises.length,
+
+        total_active_minutes:
+          totalActiveMinutes,
+
+        weekly_completed_workouts:
+          weeklyCompletedWorkouts.length,
+
+        weekly_active_minutes:
+          weeklyActiveMinutes,
+
+        weekly_workout_target:
+          weeklyWorkoutTarget,
+
+        weekly_active_minute_target:
+          weeklyActiveMinuteTarget,
+      },
+    })
+  } catch (error) {
+    console.error(
+      'Dashboard summary error:',
+      error
+    )
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to load dashboard summary',
+    })
+  }
+})
+
+
+// ============================================
+// PROGRESS API - GET
+// ============================================
+
+app.get('/api/progress', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('progress_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('recorded_at', {
+        ascending: true,
+      })
+
+    if (error) {
+      console.error('Progress fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch progress',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      progress: data || [],
+    })
+  } catch (error) {
+    console.error('Progress fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Progress fetch failed',
+    })
+  }
+})
+
+// ============================================
+// PROGRESS API - POST
+// ============================================
+
+app.post('/api/progress', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const {
+      weight_kg,
+      body_fat_percentage,
+      fitness_score,
+      active_minutes,
+      workouts_completed,
+    } = req.body
+
+    const payload = {
+      user_id: user.id,
+      weight_kg:
+        weight_kg === undefined || weight_kg === null
+          ? null
+          : Number(weight_kg),
+      body_fat_percentage:
+        body_fat_percentage === undefined ||
+          body_fat_percentage === null
+          ? null
+          : Number(body_fat_percentage),
+      fitness_score:
+        fitness_score === undefined ||
+          fitness_score === null
+          ? null
+          : Number(fitness_score),
+      active_minutes:
+        active_minutes === undefined ||
+          active_minutes === null
+          ? 0
+          : Number(active_minutes),
+      workouts_completed:
+        workouts_completed === undefined ||
+          workouts_completed === null
+          ? 0
+          : Number(workouts_completed),
+    }
+
+    const { data, error } = await supabase
+      .from('progress_logs')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Progress creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create progress log',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Progress recorded successfully',
+      progress: data,
+    })
+  } catch (error) {
+    console.error('Progress creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Progress creation failed',
+    })
+  }
+})
+
+// NUTRITION INSIGHT API
+app.get('/api/nutrition/insight', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select(`
+        age,
+        height_cm,
+        weight_kg,
+        fitness_level,
+        primary_goal,
+        workout_days_per_week
+      `)
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      console.error('Nutrition insight profile error:', profileError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition profile',
+      })
+    }
+
+    const targets = calculateNutritionTargets(profile)
+
+    const { data: nutrition, error: nutritionError } = await supabase
+      .from('nutrition_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('logged_at', { ascending: false })
+
+    if (nutritionError) {
+      console.error('Nutrition insight logs error:', nutritionError)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition logs',
+      })
+    }
+
+    const today = new Date()
+
+    const todayMeals = (nutrition || []).filter((meal) => {
+      if (!meal.logged_at) return false
+
+      const mealDate = new Date(meal.logged_at)
+
+      return (
+        mealDate.getFullYear() === today.getFullYear() &&
+        mealDate.getMonth() === today.getMonth() &&
+        mealDate.getDate() === today.getDate()
+      )
+    })
+
+    const totals = todayMeals.reduce(
+      (acc, meal) => {
+        acc.calories += Number(meal.calories || 0)
+        acc.protein_g += Number(meal.protein_g || 0)
+        acc.carbohydrates_g += Number(meal.carbohydrates_g || 0)
+        acc.fats_g += Number(meal.fats_g || 0)
+
+        return acc
+      },
+      {
+        calories: 0,
+        protein_g: 0,
+        carbohydrates_g: 0,
+        fats_g: 0,
+      }
+    )
+
+    const insight = generateNutritionInsight(
+      totals,
+      targets,
+      profile
+    )
+
+    res.json({
+      status: 'success',
+      insight,
+      totals,
+      targets,
+    })
+  } catch (error) {
+    console.error('Nutrition insight exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition insight generation failed',
+    })
+  }
+})
+
+// FITNESS AI CONTEXT API
+app.get('/api/assistant/context', async (req, res) => {
+
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    res.json({
+      status: 'success',
+      context,
+    })
+  } catch (error) {
+    console.error('Fitness context error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to build fitness context',
+    })
+  }
+})
+
+// USER STATE API
+app.get('/api/user-state', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id
+    )
+
+    // Calculate personalized nutrition targets
+    const nutritionTargets =
+      calculateNutritionTargets(context.profile)
+
+    const state = buildUserState({
+      profile: context.profile,
+      goals: context.goals,
+      workouts: context.recent_workouts,
+      workoutLogs: context.recent_workout_logs,
+      nutritionToday: context.nutrition_today,
+      nutritionTargets,
+      progress: context.recent_progress,
+      weeklyWorkoutProgress: context.weekly_workout_progress,
+    })
+
+    res.json({
+      status: 'success',
+      state,
+    })
+  } catch (error) {
+    console.error('User state error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to build user state',
+    })
+  }
+})
+
+// ============================================
+// ADAPTIVE RECOMMENDATION API
+// ============================================
+
+app.get('/api/recommendation', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const intelligence =
+      await buildIntelligenceSnapshot(
+        supabase,
+        user.id
+      )
+
+    const recommendation = {
+      next_action:
+        intelligence.next_best_action,
+
+      user_state:
+        intelligence.user_state,
+
+      learning:
+        intelligence.learning,
+    }
+
+    const eventPayload = {
+      recommendation_type:
+        recommendation
+          .next_action
+          .action,
+
+      recommendation_action:
+        recommendation
+          .next_action
+          .action,
+
+      recommendation:
+        recommendation
+          .next_action
+          .reason,
+
+      reason:
+        recommendation
+          .next_action
+          .reason,
+
+      context_snapshot: {
+        ...recommendation.user_state,
+
+        recommended_workout_id:
+          recommendation.user_state?.workout_state?.current_workout?.id || null,
+
+        recommendation_intelligence: {
+          action:
+            recommendation
+              .next_action
+              .action,
+
+          score:
+            recommendation
+              .next_action
+              .score ??
+            null,
+
+          reason:
+            recommendation
+              .next_action
+              .reason ??
+            null,
+
+          ml_enabled:
+            recommendation
+              .next_action
+              .ml_enabled ??
+            false,
+
+          completion_probability:
+            recommendation
+              .next_action
+              .completion_probability ??
+            null,
+
+          predicted_completion:
+            recommendation
+              .next_action
+              .predicted_completion ??
+            null,
+
+          historical_learning:
+            recommendation
+              .next_action
+              .historical_learning ??
+            false,
+
+          historical_completion_rate:
+            recommendation
+              .next_action
+              .historical_completion_rate ??
+            null,
+
+          historical_sample_size:
+            recommendation
+              .next_action
+              .historical_sample_size ??
+            0,
+
+          context_similarity:
+            recommendation
+              .next_action
+              .context_similarity ??
+            0,
+
+          readiness_level:
+            recommendation.next_action.readiness?.level || null,
+
+          learning_evidence_strength:
+            recommendation
+              .next_action
+              .learning_evidence_strength ??
+            0,
+        },
+      },
+    }
+
+    let event
+
+    try {
+      event =
+        await createRecommendationEvent(
+          supabase,
+          user.id,
+          eventPayload
+        )
+    } catch (insertError) {
+      if (
+        insertError.message &&
+        insertError.message.includes(
+          'recommendation_events_pending_unique_idx'
+        )
+      ) {
+        const existingEventResult =
+          await supabase
+            .from('recommendation_events')
+            .select('*')
+            .eq(
+              'user_id',
+              user.id
+            )
+            .eq(
+              'recommendation_type',
+              recommendation
+                .next_action
+                .action
+            )
+            .eq(
+              'recommendation',
+              recommendation
+                .next_action
+                .reason
+            )
+            .is(
+              'accepted',
+              null
+            )
+            .is(
+              'completed',
+              null
+            )
+            .maybeSingle()
+
+        if (
+          existingEventResult.error
+        ) {
+          throw new Error(
+            existingEventResult
+              .error
+              .message
+          )
+        }
+
+        event =
+          existingEventResult.data
+
+        if (event) {
+          const refreshedEventResult =
+            await supabase
+              .from(
+                'recommendation_events'
+              )
+              .update({
+                recommendation_action:
+                  eventPayload
+                    .recommendation_action,
+
+                reason:
+                  eventPayload.reason,
+
+                context_snapshot:
+                  eventPayload
+                    .context_snapshot,
+
+                generated_at:
+                  new Date().toISOString(),
+              })
+              .eq(
+                'id',
+                event.id
+              )
+              .eq(
+                'user_id',
+                user.id
+              )
+              .select('*')
+              .single()
+
+          if (
+            refreshedEventResult.error
+          ) {
+            throw new Error(
+              refreshedEventResult
+                .error
+                .message
+            )
+          }
+
+          event =
+            refreshedEventResult.data
+        }
+      } else {
+        throw insertError
+      }
+    }
+
+    if (!event) {
+      throw new Error(
+        'Unable to create or recover recommendation event'
+      )
+    }
+
+    return res.json({
+      status: 'success',
+
+      recommendation: {
+        ...recommendation,
+
+        event_status:
+          event,
+      },
+
+      event_id:
+        event.id,
+    })
+  } catch (error) {
+    console.error(
+      'Adaptive recommendation error:',
+      error
+    )
+
+    return res.status(500).json({
+      status: 'error',
+
+      message:
+        'Unable to generate adaptive recommendation',
+    })
+  }
+})
+
+// ============================================
+// RECOMMENDATION EVENT UPDATE API
+// ============================================
+
+app.put('/api/recommendation/events/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const event = await updateRecommendationEvent(
+      supabase,
+      user.id,
+      req.params.id,
+      req.body
+    )
+
+    res.json({
+      status: 'success',
+      event,
+    })
+  } catch (error) {
+    console.error(
+      'Recommendation event update error:',
+      error
+    )
+
+    res.status(400).json({
+      status: 'error',
+      message: error.message,
+    })
+  }
+})
+
+// ============================================
+// RECOMMENDATION EVENTS API - GET
+// ============================================
+
+app.get('/api/recommendation/events', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const events = await getRecommendationEvents(
+      supabase,
+      user.id,
+      req.query.limit
+    )
+
+    res.json({
+      status: 'success',
+      events,
+    })
+  } catch (error) {
+    console.error(
+      'Recommendation events fetch error:',
+      error
+    )
+
+    res.status(500).json({
+      status: 'error',
+      message:
+        'Unable to fetch recommendation events',
+    })
+  }
+})
+
+// FITNESS AI CHAT API
+app.post('/api/assistant/chat', assistantLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const {
+      question,
+      conversation_history,
+    } = req.body
+
+    if (!isNonEmptyString(question, 2000)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Assistant question is required and must be 2000 characters or fewer',
+      })
+    }
+
+    const conversationHistory =
+      Array.isArray(
+        conversation_history
+      )
+        ? conversation_history
+            .filter(
+              (message) =>
+                message &&
+                (message.sender === 'user' ||
+                  message.sender === 'ai') &&
+                typeof message.text ===
+                  'string' &&
+                message.text.length <= 2000
+            )
+            .slice(-12)
+        : []
+
+    const context =
+      await buildFitnessContext(
+        supabase,
+        user.id
+      )
+
+    const assistantResponse =
+      await generateAssistantResponse({
+        question,
+        context,
+        supabase,
+        userId: user.id,
+        conversationHistory,
+      })
+
+    res.json({
+      status: 'success',
+      question:
+        assistantResponse.question,
+      intent:
+        assistantResponse.intent,
+      answer:
+        assistantResponse.answer,
+      intelligence:
+        assistantResponse.intelligence || null,
+    })
+  } catch (error) {
+    console.error(
+      'Assistant chat error:',
+      error
+    )
+
+    const statusCode =
+      error?.statusCode ||
+      error?.status ||
+      error?.cause?.statusCode
+
+    const errorCode =
+      error?.error?.code ||
+      error?.cause?.error?.code
+
+    const isRateLimit =
+      statusCode === 429 ||
+      errorCode ===
+        'too_many_requests' ||
+      errorCode ===
+        'rate_limit_exceeded' ||
+      errorCode ===
+        'quota_exceeded'
+
+    if (isRateLimit) {
+      return res.status(429).json({
+        status: 'error',
+        message:
+          'FitZone AI is temporarily unavailable because the AI service has reached its current request limit. Please try again later.',
+      })
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message:
+        'Unable to process assistant request',
+    })
+  }
+})
+
+// NUTRITION TARGETS API
+app.get('/api/nutrition/targets', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select(`
+        age,
+        height_cm,
+        weight_kg,
+        fitness_level,
+        primary_goal,
+        workout_days_per_week
+      `)
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Nutrition profile error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition profile',
+      })
+    }
+
+    const targets = calculateNutritionTargets(profile)
+
+    res.json({
+      status: 'success',
+      targets,
+    })
+  } catch (error) {
+    console.error('Nutrition targets exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition target calculation failed',
+    })
+  }
+})
+
+// ============================================
+// NUTRITION API - GET
+// ============================================
+
+app.get('/api/nutrition', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('nutrition_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('logged_at', {
+        ascending: false,
+      })
+
+    if (error) {
+      console.error('Nutrition fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch nutrition logs',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      nutrition: data || [],
+    })
+  } catch (error) {
+    console.error('Nutrition fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition fetch failed',
+    })
+  }
+})
+
+// ============================================
+// NUTRITION API - POST
+// ============================================
+
+app.post('/api/nutrition', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = [
+      'meal_type',
+      'meal_name',
+      'calories',
+      'protein_g',
+      'carbohydrates_g',
+      'fats_g',
+    ]
+
+    if (rejectUnknownFields(req.body, allowedFields).length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Request contains unsupported nutrition fields',
+      })
+    }
+
+    const {
+      meal_type,
+      meal_name,
+      calories,
+      protein_g,
+      carbohydrates_g,
+      fats_g,
+    } = req.body
+
+    const allowedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+
+    if (!isNonEmptyString(meal_name, 120)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Meal name is required and must be 120 characters or fewer',
+      })
+    }
+
+    if (meal_type !== undefined && meal_type !== null && !isAllowedValue(meal_type, allowedMealTypes)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid meal type',
+      })
+    }
+
+    const numericFields = { calories, protein_g, carbohydrates_g, fats_g }
+    for (const [field, value] of Object.entries(numericFields)) {
+      if (value !== undefined && value !== null && (!isValidNumber(Number(value), 0, 100000))) {
+        return res.status(400).json({
+          status: 'error',
+          message: `${field} must be a finite non-negative number`,
+        })
+      }
+    }
+
+    const payload = {
+      user_id: user.id,
+      meal_type: meal_type || null,
+      meal_name,
+      calories:
+        calories === undefined || calories === null
+          ? null
+          : Number(calories),
+      protein_g:
+        protein_g === undefined || protein_g === null
+          ? null
+          : Number(protein_g),
+      carbohydrates_g:
+        carbohydrates_g === undefined ||
+          carbohydrates_g === null
+          ? null
+          : Number(carbohydrates_g),
+      fats_g:
+        fats_g === undefined || fats_g === null
+          ? null
+          : Number(fats_g),
+    }
+
+    const { data, error } = await supabase
+      .from('nutrition_logs')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Nutrition creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create nutrition log',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Nutrition log created successfully',
+      nutrition: data,
+    })
+  } catch (error) {
+    console.error('Nutrition creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition creation failed',
+    })
+  }
+})
+
+// ============================================
+// NUTRITION API - UPDATE
+// ============================================
+
+app.put('/api/nutrition/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const nutritionId = req.params.id
+
+    if (!requireBodyObject(req, res)) {
+      return
+    }
+
+    const allowedFields = ['meal_type', 'meal_name', 'calories', 'protein_g', 'carbohydrates_g', 'fats_g']
+    if (rejectUnknownFields(req.body, allowedFields).length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Request contains unsupported nutrition fields' })
+    }
+
+    const {
+      meal_type,
+      meal_name,
+      calories,
+      protein_g,
+      carbohydrates_g,
+      fats_g,
+    } = req.body
+
+    if (!isNonEmptyString(meal_name, 120) || !isAllowedValue(meal_type, ['Breakfast', 'Lunch', 'Dinner', 'Snack'])) {
+      return res.status(400).json({ status: 'error', message: 'Invalid meal details' })
+    }
+
+    for (const [field, value] of Object.entries({ calories, protein_g, carbohydrates_g, fats_g })) {
+      if (value !== undefined && value !== null && !isValidNumber(Number(value), 0, 100000)) {
+        return res.status(400).json({ status: 'error', message: `${field} must be a finite non-negative number` })
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('nutrition_logs')
+      .update({
+        meal_type,
+        meal_name,
+        calories:
+          calories === undefined || calories === null
+            ? null
+            : Number(calories),
+        protein_g:
+          protein_g === undefined || protein_g === null
+            ? null
+            : Number(protein_g),
+        carbohydrates_g:
+          carbohydrates_g === undefined ||
+            carbohydrates_g === null
+            ? null
+            : Number(carbohydrates_g),
+        fats_g:
+          fats_g === undefined || fats_g === null
+            ? null
+            : Number(fats_g),
+      })
+      .eq('id', nutritionId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Nutrition update error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Nutrition log not found' })
+      }
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to update nutrition log',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Nutrition log updated successfully',
+      nutrition: data,
+    })
+  } catch (error) {
+    console.error('Nutrition update exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition update failed',
+    })
+  }
+})
+
+// ============================================
+// NUTRITION API - DELETE
+// ============================================
+
+app.delete('/api/nutrition/:id', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const nutritionId = req.params.id
+
+    const { data, error } = await supabase
+      .from('nutrition_logs')
+      .delete()
+      .eq('id', nutritionId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Nutrition delete error:', error)
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ status: 'error', message: 'Nutrition log not found' })
+      }
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to delete nutrition log',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Nutrition log deleted successfully',
+      nutrition: data,
+    })
+  } catch (error) {
+    console.error('Nutrition delete exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Nutrition deletion failed',
+    })
+  }
+})
+
+// ============================================
+// DASHBOARD SUMMARY API
+// ============================================
+
+app.get('/api/dashboard', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const [
+      profileResult,
+      workoutsResult,
+      goalsResult,
+      progressResult,
+      nutritionResult,
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single(),
+
+      supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', {
+          ascending: false,
+        }),
+
+      supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', {
+          ascending: false,
+        }),
+
+      supabase
+        .from('progress_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('recorded_at', {
+          ascending: false,
+        }),
+
+      supabase
+        .from('nutrition_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('logged_at', {
+          ascending: false,
+        }),
+    ])
+
+    if (profileResult.error) {
+      console.error(
+        'Dashboard profile error:',
+        profileResult.error
+      )
+    }
+
+    if (workoutsResult.error) {
+      console.error(
+        'Dashboard workouts error:',
+        workoutsResult.error
+      )
+    }
+
+    if (goalsResult.error) {
+      console.error(
+        'Dashboard goals error:',
+        goalsResult.error
+      )
+    }
+
+    if (progressResult.error) {
+      console.error(
+        'Dashboard progress error:',
+        progressResult.error
+      )
+    }
+
+    if (nutritionResult.error) {
+      console.error(
+        'Dashboard nutrition error:',
+        nutritionResult.error
+      )
+    }
+
+    const workouts = workoutsResult.data || []
+    const goals = goalsResult.data || []
+    const progress = progressResult.data || []
+    const nutrition = nutritionResult.data || []
+
+    const completedWorkouts = workouts.filter(
+      (workout) => workout.completed
+    )
+
+    const completedGoals = goals.filter(
+      (goal) => goal.completed
+    )
+
+    const totalActiveMinutes = progress.reduce(
+      (total, item) =>
+        total + Number(item.active_minutes || 0),
+      0
+    )
+
+    const totalCalories = nutrition.reduce(
+      (total, item) =>
+        total + Number(item.calories || 0),
+      0
+    )
+
+    res.json({
+      status: 'success',
+
+      dashboard: {
+        profile: profileResult.data || null,
+
+        stats: {
+          total_workouts: workouts.length,
+          completed_workouts: completedWorkouts.length,
+          total_goals: goals.length,
+          completed_goals: completedGoals.length,
+          total_active_minutes: totalActiveMinutes,
+          total_calories_logged: totalCalories,
+        },
+
+        workouts,
+        goals,
+        progress,
+        nutrition,
+      },
+    })
+  } catch (error) {
+    console.error('Dashboard exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Dashboard data fetch failed',
+    })
+  }
+})
+
+// ============================================
+// AI PLAN API - GET
+// ============================================
+
+app.get('/api/ai-plan', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('ai_plans')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', {
+        ascending: false,
+      })
+
+    if (error) {
+      console.error('AI plans fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch AI plans',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      plans: data || [],
+    })
+  } catch (error) {
+    console.error('AI plans fetch exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'AI plans fetch failed',
+    })
+  }
+})
+
+// ============================================
+// AI PLAN API - POST
+// ============================================
+
+app.post('/api/ai-plan', generationLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const {
+      plan_type,
+      goal,
+      fitness_level,
+      workout_days_per_week,
+      workout_duration_minutes,
+      plan_data,
+    } = req.body
+
+    const { data, error } = await supabase
+      .from('ai_plans')
+      .insert({
+        user_id: user.id,
+        plan_type: plan_type || 'workout',
+        goal: goal || null,
+        fitness_level: fitness_level || null,
+        workout_days_per_week:
+          workout_days_per_week === undefined ||
+            workout_days_per_week === null
+            ? null
+            : Number(workout_days_per_week),
+        workout_duration_minutes:
+          workout_duration_minutes === undefined ||
+            workout_duration_minutes === null
+            ? null
+            : Number(workout_duration_minutes),
+        plan_data: plan_data || null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('AI plan creation error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to create AI plan',
+      })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      message: 'AI plan created successfully',
+      plan: data,
+    })
+  } catch (error) {
+    console.error('AI plan creation exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'AI plan creation failed',
+    })
+  }
+})
+
+// ============================================
+// PROFILE + AUTH STATUS API
+// ============================================
+
+app.get('/api/auth/session', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  res.json({
+    status: 'success',
+    authenticated: true,
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+  })
+})
+
+app.get('/api/auth/me', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) {
+    return
+  }
+
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Auth profile fetch error:', error)
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Unable to fetch authenticated profile',
+      })
+    }
+
+    res.json({
+      status: 'success',
+      user,
+      profile,
+    })
+  } catch (error) {
+    console.error('Auth me exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to fetch authenticated user',
+    })
+  }
+})
+
+// ============================================
+// LOGOUT API
+// ============================================
+
+app.post('/api/logout', async (req, res) => {
+  const authHeader = req.headers.authorization
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication token is required',
+    })
+  }
+
+  const accessToken = authHeader.replace('Bearer ', '').trim()
+
+  try {
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      console.error('Logout error:', error)
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Logout request completed',
+      token_received: Boolean(accessToken),
+    })
+  } catch (error) {
+    console.error('Logout exception:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Logout failed',
+    })
+  }
+})
+
+// AI TOOL: TODAY'S NUTRITION
+app.get('/api/ai/tools/nutrition/today', async (req, res) => {
+  const user = await authenticateUser(req, res)
+
+  if (!user) return
+
+  try {
+    const nutrition = await getTodayNutrition(
+      supabase,
+      user.id
+    )
+
+    res.json({
+      status: 'success',
+      nutrition,
+    })
+  } catch (error) {
+    console.error('Today nutrition tool error:', error)
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Unable to retrieve today\'s nutrition',
+    })
+  }
+})
+
+app.get("/api/activity-profile/model-status", (req, res) => {
+  try {
+    const model = validateModelFile();
+
+    res.json({
+      status: "success",
+      model: {
+        name: "FitZone Activity Level Model",
+        runtime: "ONNX",
+        available: model.available,
+        size_bytes: model.size_bytes
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message
+    });
+  }
+});
+
+app.post("/api/activity-profile/features", async (req, res) => {
+  const user = await authenticateUser(req, res);
+
+  if (!user) {
+    return;
+  }
+
+  try {
+    const features = prepareFeatures(req.body);
+
+    res.json({
+      status: "success",
+      features
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "error",
+      message: error.message
+    });
+  }
+});
+
+
+app.use("/api/activity-profile", activityProfileRouter);
+app.use("/api/intelligence", intelligenceRouter);
+// ============================================
+// 404 HANDLER
+// ============================================
+
+app.use((req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: 'API route not found',
+    path: req.originalUrl,
+  })
+})
+
+// ============================================
+// GLOBAL ERROR HANDLER
+// ============================================
+
+app.use((error, req, res, next) => {
+  console.error('Unhandled server error:', error)
+
+  if (res.headersSent) {
+    return next(error)
+  }
+
+  res.status(500).json({
+    status: 'error',
+    message: 'Internal server error',
+  })
+})
+
+// ============================================
+// START SERVER
+// ============================================
+
+app.listen(PORT, () => {
+  console.log(
+    `FitZone AI backend running on http://localhost:${PORT}`
+  )
+})

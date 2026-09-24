@@ -1,0 +1,16 @@
+FitZone AI release patch
+2026-09-24
+
+Fix: login CORS preflight failure caused by frontend sending Cache-Control as a request header.
+
+Frontend:
+  frontend/src/api/client.js
+
+Backend behavior preserved:
+  backend/server.js -> Cache-Control: no-store on /api responses
+  backend/middleware/security.js -> allow-list request headers: Authorization, Content-Type
+
+Regression test:
+  backend/tests/security-validation.js
+
+Do not broaden CORS headers to permit Cache-Control as a workaround. The header is unnecessary on requests.
