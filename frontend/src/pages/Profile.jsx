@@ -196,6 +196,13 @@ function Profile() {
     )
   }
 
+  const initials = (profile.full_name || 'F Z')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('')
+
   return (
     <div className="page">
       <div className="page-header">
@@ -208,6 +215,17 @@ function Profile() {
           </p>
         </div>
       </div>
+
+      <section className="profile-summary">
+        <span className="profile-avatar">{initials}</span>
+        <div>
+          <strong>{profile.full_name || 'Your Profile'}</strong>
+          <div className="profile-summary-badges">
+            <span className="badge badge-goal">{profile.primary_goal}</span>
+            <span className="badge badge-level">{profile.fitness_level}</span>
+          </div>
+        </div>
+      </section>
 
       {message && (
         <div className="alert success">

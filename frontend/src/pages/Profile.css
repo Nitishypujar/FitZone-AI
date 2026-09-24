@@ -2,181 +2,125 @@
    PROFILE PAGE
    ============================================ */
 
-   .profile-card {
-    width: 100%;
-    max-width: 1000px;
-    margin-top: 32px;
-    padding: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.025);
-    box-sizing: border-box;
-  }
-  
-  .profile-card-header {
-    margin-bottom: 30px;
-  }
-  
-  .profile-card-header h2 {
-    margin: 0 0 8px;
-    font-size: 24px;
-    color: #ffffff;
-  }
-  
-  .profile-card-header p {
-    margin: 0;
-    max-width: 700px;
-    color: #a7a7a7;
-    line-height: 1.6;
-  }
-  
-  /* ============================================
-     FORM GRID
-     ============================================ */
-  
-  .profile-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
-  }
-  
-  .profile-form-grid label {
-    display: flex;
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+
+  margin: 28px 0 40px;
+  padding: 22px 26px;
+
+  border: 1px solid var(--color-hairline);
+  border-radius: 16px;
+  background: var(--color-ink-raised);
+}
+
+.profile-avatar {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  background: var(--color-amber);
+  color: var(--color-ink);
+
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.profile-summary > div {
+  min-width: 0;
+}
+
+.profile-summary strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--color-chalk);
+  margin-bottom: 8px;
+}
+
+.profile-summary-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.badge-goal {
+  background: rgba(227, 155, 60, 0.14);
+  color: var(--color-amber);
+  border: 1px solid rgba(227, 155, 60, 0.3);
+}
+
+.badge-level {
+  background: rgba(61, 156, 130, 0.14);
+  color: var(--color-teal);
+  border: 1px solid rgba(61, 156, 130, 0.3);
+}
+
+.profile-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 22px 24px;
+}
+
+.profile-form .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-chalk-dim);
+}
+
+.profile-form .form-group input,
+.profile-form .form-group select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+
+  border: 1px solid var(--color-hairline);
+  border-radius: 10px;
+  background: var(--color-ink);
+  color: var(--color-chalk);
+
+  font-size: 14px;
+  transition: border-color 0.15s ease;
+}
+
+.profile-form .form-group input:focus,
+.profile-form .form-group select:focus {
+  outline: none;
+  border-color: var(--color-amber);
+}
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 30px;
+}
+
+@media (max-width: 640px) {
+  .profile-summary {
     flex-direction: column;
-    gap: 9px;
-    color: #e8e8e8;
-    font-size: 14px;
-    font-weight: 600;
+    align-items: flex-start;
   }
-  
-  .profile-form-grid input,
-  .profile-form-grid select {
-    width: 100%;
-    min-height: 48px;
-    padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    outline: none;
-    background: #15181c;
-    color: #ffffff;
-    font-size: 15px;
-    box-sizing: border-box;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease,
-      background 0.2s ease;
-  }
-  
-  .profile-form-grid input::placeholder {
-    color: #6f7378;
-  }
-  
-  .profile-form-grid input:focus,
-  .profile-form-grid select:focus {
-    border-color: #9cff00;
-    box-shadow: 0 0 0 3px rgba(156, 255, 0, 0.1);
-    background: #181c20;
-  }
-  
-  .profile-form-grid select {
-    cursor: pointer;
-  }
-  
-  /* ============================================
-     MESSAGES
-     ============================================ */
-  
-  .profile-card .auth-error {
-    margin-top: 24px;
-    margin-bottom: 0;
-  }
-  
-  .profile-success {
-    margin-top: 24px;
-    margin-bottom: 0;
-    padding: 12px 14px;
-    border: 1px solid rgba(156, 255, 0, 0.2);
-    border-radius: 10px;
-    background: rgba(156, 255, 0, 0.06);
-    color: #baff52;
-    font-size: 14px;
-  }
-  
-  /* ============================================
-     ACTIONS
-     ============================================ */
-  
-  .profile-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  
-  .profile-actions .primary-button {
-    min-width: 150px;
-  }
-  
-  /* ============================================
-     INFORMATION NOTE
-     ============================================ */
-  
-  .profile-note {
-    width: 100%;
-    max-width: 1000px;
-    margin-top: 20px;
-    padding: 22px 24px;
-    border-left: 3px solid #9cff00;
-    border-radius: 0 12px 12px 0;
-    background: rgba(156, 255, 0, 0.035);
-    box-sizing: border-box;
-  }
-  
-  .profile-note strong {
-    display: block;
-    margin-bottom: 8px;
-    color: #ffffff;
-    font-size: 15px;
-  }
-  
-  .profile-note p {
-    margin: 0;
-    color: #9a9a9a;
-    line-height: 1.6;
-    font-size: 14px;
-  }
-  
-  /* ============================================
-     RESPONSIVE
-     ============================================ */
-  
-  @media (max-width: 768px) {
-    .profile-card {
-      padding: 24px;
-    }
-  
-    .profile-form-grid {
-      grid-template-columns: 1fr;
-      gap: 20px;
-    }
-  
-    .profile-actions {
-      justify-content: stretch;
-    }
-  
-    .profile-actions .primary-button {
-      width: 100%;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .profile-card {
-      padding: 20px;
-      border-radius: 16px;
-    }
-  
-    .profile-card-header h2 {
-      font-size: 21px;
-    }
-  }
+}
