@@ -5,6 +5,7 @@ import { api } from '../api/client'
 
 function Workout() {
   const queryClient = useQueryClient()
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   const [workouts, setWorkouts] = useState([])
   const [selectedWorkout, setSelectedWorkout] = useState(null)
   const [completedExercises, setCompletedExercises] = useState([])
@@ -21,15 +22,15 @@ function Workout() {
       setLoading(true)
       setError('')
 
-      const [data, current] = await Promise.all([
+      const [data, brain] = await Promise.all([
         api.get('/api/workouts'),
-        api.get('/api/workouts/current').catch(() => null),
+        api.get(`/api/fitness/state?timezone=${encodeURIComponent(timeZone)}`).catch(() => null),
       ])
 
       const workoutList = Array.isArray(data.workouts) ? data.workouts : []
       setWorkouts(workoutList)
 
-      const exactWorkoutId = current?.workout?.id
+      const exactWorkoutId = brain?.next_open_workout?.id || brain?.today_workout?.id
       const preferredWorkout =
         workoutList.find((workout) => String(workout.id) === String(exactWorkoutId)) ||
         workoutList.find((workout) => workout.completed !== true && Array.isArray(workout.exercises) && workout.exercises.length > 0) ||
@@ -79,7 +80,7 @@ function Workout() {
   }
 
   async function toggleExercise(exercise) {
-    if (!selectedWorkout) return
+    if (!selectedWorkout || selectedWorkout.completed) return
 
     setError('')
 
@@ -114,6 +115,7 @@ function Workout() {
 
       queryClient.invalidateQueries({ queryKey: ['workouts'] })
       queryClient.invalidateQueries({ queryKey: ['intelligence'] })
+    queryClient.invalidateQueries({ queryKey: ['fitness-brain'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['recommendation'] })
       queryClient.invalidateQueries({ queryKey: ['progress'] })
@@ -167,6 +169,9 @@ function Workout() {
       // this workout was completed. This is the direct fix for "old
       // data comes back when I navigate away and come back."
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['fitness-brain'] })
+      queryClient.invalidateQueries({ queryKey: ['recommendation'] })
+      queryClient.invalidateQueries({ queryKey: ['progress'] })
     } catch (error) {
       console.error(
         'Workout completion error:',
@@ -252,7 +257,7 @@ function Workout() {
       <section className="workout-session-bar">
         <div><span>SESSION PROGRESS</span><strong>{completedCount} / {exercises.length} exercises</strong></div>
         <div className="workout-progress-track"><i style={{ width: `${progress}%` }} /></div>
-        <div className="workout-session-note">{selectedWorkout.completed ? 'Workout recorded' : 'Complete each exercise, then finish the session.'}</div>
+        <div className="workout-session-note">{selectedWorkout.completed ? 'Workout recorded earlier. Opening this page does not change completion.' : 'Complete each exercise, then finish the session.'}</div>
       </section>
 
       {availableWorkouts.length > 1 && (
@@ -274,7 +279,7 @@ function Workout() {
             <article className={`workout-exercise-card ${completed ? 'completed' : ''}`} key={`${exercise.name}-${index}`}>
               <div className="exercise-index">{String(index + 1).padStart(2, '0')}</div>
               <div className="exercise-main"><span className="exercise-type">{exercise.type || 'FITNESS'}</span><h3>{exercise.name}</h3><p>{exercise.sets ? `${exercise.sets} sets` : ''}{exercise.repetitions ? ` × ${exercise.repetitions} reps` : ''}{exercise.duration_seconds ? ` · ${exercise.duration_seconds}s` : ''}{exercise.rest_seconds ? ` · ${exercise.rest_seconds}s rest` : ''}</p></div>
-              <button className="exercise-complete" onClick={() => toggleExercise(exercise)}>{completed ? 'Completed ✓' : 'Complete'}</button>
+              <button className="exercise-complete" onClick={() => toggleExercise(exercise)} disabled={selectedWorkout.completed}>{completed ? 'Completed ✓' : 'Complete'}</button>
             </article>
           )
         })}

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './App.css'
 
 import Login from './pages/Login'
@@ -18,19 +18,22 @@ import Goals from './pages/Goals'
 import Nutrition from './pages/Nutrition'
 import Assistant from './pages/Assistant'
 import Profile from './pages/Profile'
+import Admin from './pages/Admin'
 
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import DashboardLayout from './components/DashboardLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 
-function App() {
-  return (
-    <BrowserRouter>
-      <div className="app">
-        <Navbar />
+function AppShell() {
+  const location = useLocation()
+  const isAppRoute = ['/dashboard', '/workout', '/ai-plan', '/progress', '/goals', '/nutrition', '/assistant', '/profile', '/admin'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
 
-        <Routes>
+  return (
+    <div className="app">
+      {!isAppRoute && <Navbar />}
+
+      <Routes>
           {/* Public pages */}
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
@@ -53,12 +56,20 @@ function App() {
               <Route path="/nutrition" element={<Nutrition />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/admin" element={<Admin />} />
             </Route>
           </Route>
-        </Routes>
+      </Routes>
 
-        <Footer />
-      </div>
+      {!isAppRoute && <Footer />}
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   )
 }

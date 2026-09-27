@@ -19,6 +19,7 @@ const {
   createRecommendationEvent,
   updateRecommendationEvent,
   getRecommendationEvents,
+  calculateOutcomeScore,
 } = require('./services/recommendationEvents')
 
 const {
@@ -50,6 +51,11 @@ const {
 } = require('./middleware/validation')
 const { generatePersonalizedWorkout } = require('./services/ai/personalizedWorkoutEngine')
 const { trainCompletionModelFromHistory } = require('./services/ml/trainFromHistory')
+const { analyzeFoodText } = require('./services/nutrition/nutritionParser')
+const { searchFoods } = require('./services/nutrition/foodKnowledge')
+const { buildNutritionIntelligence, dayKeyFromDate } = require('./services/nutrition/nutritionIntelligence')
+const { buildDailyActivity, calculateWorkoutStreaks, getDailyActivity } = require('./services/activity/dailyActivityService')
+const { trainNutritionAdherenceModel, getNutritionModelStatus } = require('./services/ml/personalizationClient')
 
 const { buildUserState } = require('./services/userState')
 const app = express()
@@ -74,6 +80,40 @@ function getFrontendOrigin() {
 
 function getEmailRedirectUrl() {
   return `${getFrontendOrigin()}/register?confirmed=1`
+}
+
+function getRequestTimeZone(req) {
+  const requested = String(req?.query?.timezone || '').trim()
+  if (!requested || requested.length > 64) return 'UTC'
+
+  try {
+    // Validate the IANA timezone before it reaches date formatting and
+    // aggregation code. Invalid user input should never turn into a 500.
+    new Intl.DateTimeFormat('en-US', { timeZone: requested }).format()
+    return requested
+  } catch {
+    return 'UTC'
+  }
+}
+
+const GOAL_TYPE_LABELS = {
+  'fat-loss': 'Fat Loss',
+  'weight-loss': 'Fat Loss',
+  'weight-gain': 'Weight Gain',
+  'muscle-growth': 'Muscle Growth',
+  muscle: 'Muscle Growth',
+  strength: 'Strength',
+  endurance: 'Endurance',
+  'general-fitness': 'General Fitness',
+  fitness: 'General Fitness',
+  'maintain-fitness': 'Maintain Fitness',
+  flexibility: 'Flexibility',
+  stamina: 'Stamina',
+}
+
+function goalTypeToProfileGoal(goalType) {
+  const key = String(goalType || '').trim().toLowerCase()
+  return GOAL_TYPE_LABELS[key] || null
 }
 
 app.disable('x-powered-by')
@@ -143,6 +183,39 @@ async function authenticateUser(req, res) {
   }
 }
 
+
+function isAdminUser(user) {
+  if (!user) return false
+  const role = String(user.app_metadata?.role || '').toLowerCase()
+  if (role === 'admin' || role === 'super_admin' || role === 'owner') return true
+  const configuredIds = (process.env.ADMIN_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean)
+  const configuredEmails = (process.env.ADMIN_EMAILS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)
+  return configuredIds.includes(user.id) || configuredEmails.includes(String(user.email || '').toLowerCase())
+}
+
+async function authenticateAdmin(req, res) {
+  const user = await authenticateUser(req, res)
+  if (!user) return null
+  if (!isAdminUser(user)) {
+    res.status(403).json({ status: 'error', message: 'Admin access is required.' })
+    return null
+  }
+  return user
+}
+
+async function writeAdminAudit({ userId, action, targetUserId = null, metadata = null }) {
+  try {
+    await supabase.from('admin_audit_logs').insert({
+      admin_user_id: userId,
+      action,
+      target_user_id: targetUserId,
+      metadata,
+    })
+  } catch (error) {
+    console.error('Admin audit write error:', error)
+  }
+}
+
 // ============================================
 // ROOT API
 // ============================================
@@ -170,11 +243,12 @@ app.get('/api/health', (req, res) => {
 // ============================================
 
 app.post('/api/ml/train', mlTrainingLimiter, async (req, res) => {
-  const user = await authenticateUser(req, res)
+  const user = await authenticateAdmin(req, res)
   if (!user) return
 
   try {
     const result = await trainCompletionModelFromHistory()
+    await writeAdminAudit({ userId: user.id, action: 'train_completion_model', metadata: { samples: result?.example_count || null } })
     res.json({ status: 'success', ...result })
   } catch (error) {
     console.error('ML training error:', error)
@@ -289,11 +363,11 @@ app.post('/api/register', authLimiter, async (req, res) => {
         age: age || null,
         height_cm: height_cm || null,
         weight_kg: weight_kg || null,
-        fitness_level: fitness_level || 'beginner',
-        primary_goal: primary_goal || 'General Fitness',
-        workout_days_per_week: workout_days_per_week || 3,
+        fitness_level: fitness_level ?? null,
+        primary_goal: primary_goal ?? null,
+        workout_days_per_week: workout_days_per_week ?? null,
         preferred_workout_duration:
-          preferred_workout_duration || 45,
+          preferred_workout_duration ?? null,
       })
 
     if (profileError) {
@@ -670,10 +744,83 @@ app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
   }
 
   try {
-    const intelligence = await buildIntelligenceSnapshot(supabase, user.id)
+    const timeZone = getRequestTimeZone(req)
+
+    // Generation is idempotent while a personalized recommendation still points
+    // to an incomplete workout. This prevents refreshes/double-clicks from
+    // creating duplicate workout rows for the same pending recommendation.
+    const { data: pendingEvent, error: pendingEventError } = await supabase
+      .from('recommendation_events')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('completed', null)
+      .not('workout_id', 'is', null)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (pendingEventError) {
+      console.error('Pending recommendation lookup warning:', pendingEventError)
+    }
+
+    if (pendingEvent?.workout_id !== null && pendingEvent?.workout_id !== undefined) {
+      const existingResult = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('id', pendingEvent.workout_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (existingResult.error) throw new Error(existingResult.error.message)
+
+      if (existingResult.data && !existingResult.data.completed) {
+        const snapshot = pendingEvent.context_snapshot || {}
+        const recommendation = snapshot.recommendation_intelligence || null
+        return res.status(200).json({
+          status: 'success',
+          message: 'Using your current personalized workout.',
+          workout: existingResult.data,
+          recommendation_event: pendingEvent,
+          event_id: pendingEvent.id,
+          metadata: {
+            existing_recommendation: true,
+            goal_driven: true,
+            recommendation_action: recommendation?.action || pendingEvent.recommendation_action || null,
+            recommendation_score: recommendation?.score ?? null,
+          },
+          intelligence: {
+            action: recommendation?.action || pendingEvent.recommendation_action || null,
+            reason: recommendation?.reason || pendingEvent.reason || null,
+            effective_goal: snapshot.profile?.primary_goal || 'General Fitness',
+            ml_enabled: recommendation?.ml_enabled === true,
+            ml_source: recommendation?.ml_source || 'stored_recommendation',
+          },
+        })
+      }
+    }
+
+    const intelligence = await buildIntelligenceSnapshot(supabase, user.id, timeZone)
     const userState = intelligence.user_state
     const recommendation = intelligence.next_best_action
-    const profile = userState.profile
+    const profile = userState.profile || {}
+    const requiredPersonalizationFields = [
+      ['primary_goal', profile.primary_goal],
+      ['fitness_level', profile.fitness_level],
+      ['workout_days_per_week', Number(profile.workout_days_per_week) > 0 ? profile.workout_days_per_week : null],
+      ['preferred_workout_duration', Number(profile.preferred_workout_duration) > 0 ? profile.preferred_workout_duration : null],
+    ]
+    const missingProfileFields = requiredPersonalizationFields
+      .filter(([, value]) => value === null || value === undefined || value === '')
+      .map(([field]) => field)
+
+    if (missingProfileFields.length > 0) {
+      return res.status(422).json({
+        status: 'error',
+        code: 'PROFILE_INCOMPLETE',
+        message: 'Complete your Profile before generating a personalized workout.',
+        missing_fields: missingProfileFields,
+      })
+    }
 
     const generatedWorkout = generatePersonalizedWorkout({
       profile,
@@ -688,7 +835,7 @@ app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
       recommendation,
     })
 
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalDateKey(new Date(), timeZone)
 
     const { data: workout, error: workoutError } = await supabase
       .from('workouts')
@@ -843,7 +990,7 @@ app.get('/api/workouts/current', async (req, res) => {
     }
 
     if (!workout) {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getLocalDateKey(new Date(), getRequestTimeZone(req))
       const fallback = await supabase
         .from('workouts')
         .select('*')
@@ -1218,6 +1365,10 @@ app.put('/api/workouts/:id', async (req, res) => {
                 .from('recommendation_events')
                 .update({
                   completed: true,
+                  outcome_score: calculateOutcomeScore({
+                    ...matchingEvent,
+                    completed: true,
+                  }),
                   outcome_recorded_at: new Date().toISOString(),
                 })
                 .eq('id', matchingEvent.id)
@@ -1602,6 +1753,8 @@ app.post('/api/goals', async (req, res) => {
     }
 
     if (
+      weekly_workout_target !== null &&
+      weekly_workout_target !== undefined &&
       !isValidInteger(
         weekly_workout_target,
         2,
@@ -1611,11 +1764,13 @@ app.post('/api/goals', async (req, res) => {
       return res.status(400).json({
         status: 'error',
         message:
-          'Weekly workout target must be an integer between 2 and 7',
+          'Weekly workout target must be null or an integer between 2 and 7',
       })
     }
 
     if (
+      weekly_active_minute_target !== null &&
+      weekly_active_minute_target !== undefined &&
       !isValidInteger(
         weekly_active_minute_target,
         60,
@@ -1625,7 +1780,7 @@ app.post('/api/goals', async (req, res) => {
       return res.status(400).json({
         status: 'error',
         message:
-          'Weekly active minute target must be an integer between 60 and 500',
+          'Weekly active minute target must be null or an integer between 60 and 500',
       })
     }
 
@@ -1661,7 +1816,7 @@ app.post('/api/goals', async (req, res) => {
 
     const { error: profileGoalError } = await supabase
       .from('profiles')
-      .update({ primary_goal: goal_type })
+      .update({ primary_goal: goalTypeToProfileGoal(goal_type) })
       .eq('id', user.id)
 
     if (profileGoalError) {
@@ -1763,6 +1918,8 @@ app.put('/api/goals/:id', async (req, res) => {
     }
 
     if (
+      weekly_workout_target !== null &&
+      weekly_workout_target !== undefined &&
       !isValidInteger(
         weekly_workout_target,
         2,
@@ -1772,11 +1929,13 @@ app.put('/api/goals/:id', async (req, res) => {
       return res.status(400).json({
         status: 'error',
         message:
-          'Weekly workout target must be an integer between 2 and 7',
+          'Weekly workout target must be null or an integer between 2 and 7',
       })
     }
 
     if (
+      weekly_active_minute_target !== null &&
+      weekly_active_minute_target !== undefined &&
       !isValidInteger(
         weekly_active_minute_target,
         60,
@@ -1786,7 +1945,7 @@ app.put('/api/goals/:id', async (req, res) => {
       return res.status(400).json({
         status: 'error',
         message:
-          'Weekly active minute target must be an integer between 60 and 500',
+          'Weekly active minute target must be null or an integer between 60 and 500',
       })
     }
 
@@ -1828,7 +1987,7 @@ app.put('/api/goals/:id', async (req, res) => {
     // downstream nutrition and intelligence calculations observe the same intent.
     const { error: profileGoalError } = await supabase
       .from('profiles')
-      .update({ primary_goal: goal_type })
+      .update({ primary_goal: goalTypeToProfileGoal(goal_type) })
       .eq('id', user.id)
 
     if (profileGoalError) {
@@ -1940,8 +2099,10 @@ app.get('/api/dashboard/summary', async (req, res) => {
     // CURRENT WEEK (AUTHORITATIVE)
     // --------------------------------------------
 
+    const dashboardTimeZone = getRequestTimeZone(req)
+
     const weeklyProgress =
-      calculateWeeklyWorkoutProgress(workouts || [])
+      calculateWeeklyWorkoutProgress(workouts || [], new Date(), dashboardTimeZone)
 
     const weeklyCompletedWorkouts = (workouts || []).filter((workout) => {
       const completionDate = workout.completed_at
@@ -1970,9 +2131,10 @@ app.get('/api/dashboard/summary', async (req, res) => {
     )
 
     const weeklyWorkoutTarget =
-      Number(
-        workoutGoal?.weekly_workout_target
-      ) || 7
+      workoutGoal?.weekly_workout_target !== null &&
+      workoutGoal?.weekly_workout_target !== undefined
+        ? Number(workoutGoal.weekly_workout_target)
+        : null
 
     // --------------------------------------------
     // WEEKLY ACTIVE MINUTE TARGET
@@ -1985,9 +2147,10 @@ app.get('/api/dashboard/summary', async (req, res) => {
     )
 
     const weeklyActiveMinuteTarget =
-      Number(
-        activeMinuteGoal?.weekly_active_minute_target
-      ) || 380
+      activeMinuteGoal?.weekly_active_minute_target !== null &&
+      activeMinuteGoal?.weekly_active_minute_target !== undefined
+        ? Number(activeMinuteGoal.weekly_active_minute_target)
+        : null
 
     // --------------------------------------------
     // RESPONSE
@@ -2073,6 +2236,51 @@ app.get('/api/progress', async (req, res) => {
       status: 'error',
       message: 'Progress fetch failed',
     })
+  }
+})
+
+// ============================================
+// PROGRESS ACTIVITY TIMELINE API
+// ============================================
+
+function getLocalDateKey(value, timeZone = 'UTC') {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function buildDateKeys(endDateKey, count) {
+  const keys = []
+  const cursor = new Date(`${endDateKey}T12:00:00.000Z`)
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const date = new Date(cursor)
+    date.setUTCDate(cursor.getUTCDate() - index)
+    keys.push(date.toISOString().slice(0, 10))
+  }
+  return keys
+}
+
+app.get('/api/progress/activity', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const range = String(req.query.range || '4w').toLowerCase()
+    const timeZone = getRequestTimeZone(req)
+    const activity = await getDailyActivity(supabase, user.id, { timeZone, range })
+    res.json(activity)
+  } catch (error) {
+    console.error('Progress activity error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to load activity history.' })
   }
 })
 
@@ -2262,7 +2470,8 @@ app.get('/api/assistant/context', async (req, res) => {
   try {
     const context = await buildFitnessContext(
       supabase,
-      user.id
+      user.id,
+      getRequestTimeZone(req)
     )
 
     res.json({
@@ -2288,7 +2497,8 @@ app.get('/api/user-state', async (req, res) => {
   try {
     const context = await buildFitnessContext(
       supabase,
-      user.id
+      user.id,
+      getRequestTimeZone(req)
     )
 
     // Calculate personalized nutrition targets
@@ -2304,6 +2514,7 @@ app.get('/api/user-state', async (req, res) => {
       nutritionTargets,
       progress: context.recent_progress,
       weeklyWorkoutProgress: context.weekly_workout_progress,
+      timeZone: context.time_zone || getRequestTimeZone(req),
     })
 
     res.json({
@@ -2317,6 +2528,38 @@ app.get('/api/user-state', async (req, res) => {
       status: 'error',
       message: 'Unable to build user state',
     })
+  }
+})
+
+// Backward-compatible fitness state route. Older frontend builds used
+// /api/fitness/state; keep it mapped to the same canonical user-state brain
+// so a stale client cannot fail with a 404.
+app.get('/api/fitness/state', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const context = await buildFitnessContext(
+      supabase,
+      user.id,
+      getRequestTimeZone(req)
+    )
+    const nutritionTargets = calculateNutritionTargets(context.profile)
+    const state = buildUserState({
+      profile: context.profile,
+      goals: context.goals,
+      workouts: context.recent_workouts,
+      workoutLogs: context.recent_workout_logs,
+      nutritionToday: context.nutrition_today,
+      nutritionTargets,
+      progress: context.recent_progress,
+      weeklyWorkoutProgress: context.weekly_workout_progress,
+      timeZone: context.time_zone || getRequestTimeZone(req),
+    })
+    res.json({ status: 'success', state })
+  } catch (error) {
+    console.error('Fitness state compatibility error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to build fitness state' })
   }
 })
 
@@ -2335,7 +2578,8 @@ app.get('/api/recommendation', async (req, res) => {
     const intelligence =
       await buildIntelligenceSnapshot(
         supabase,
-        user.id
+        user.id,
+        getRequestTimeZone(req)
       )
 
     const recommendation = {
@@ -2700,7 +2944,8 @@ app.post('/api/assistant/chat', assistantLimiter, async (req, res) => {
     const context =
       await buildFitnessContext(
         supabase,
-        user.id
+        user.id,
+        getRequestTimeZone(req)
       )
 
     const assistantResponse =
@@ -2710,6 +2955,7 @@ app.post('/api/assistant/chat', assistantLimiter, async (req, res) => {
         supabase,
         userId: user.id,
         conversationHistory,
+        timeZone: getRequestTimeZone(req),
       })
 
     res.json({
@@ -2720,6 +2966,8 @@ app.post('/api/assistant/chat', assistantLimiter, async (req, res) => {
         assistantResponse.intent,
       answer:
         assistantResponse.answer,
+      response_source:
+        assistantResponse.response_source || 'gemini',
       intelligence:
         assistantResponse.intelligence || null,
     })
@@ -2826,6 +3074,7 @@ app.get('/api/nutrition', async (req, res) => {
       .order('logged_at', {
         ascending: false,
       })
+      .limit(2000)
 
     if (error) {
       console.error('Nutrition fetch error:', error)
@@ -2873,6 +3122,11 @@ app.post('/api/nutrition', async (req, res) => {
       'protein_g',
       'carbohydrates_g',
       'fats_g',
+      'fiber_g',
+      'entry_source',
+      'nutrition_confidence',
+      'food_items',
+      'logged_at',
     ]
 
     if (rejectUnknownFields(req.body, allowedFields).length > 0) {
@@ -2889,6 +3143,11 @@ app.post('/api/nutrition', async (req, res) => {
       protein_g,
       carbohydrates_g,
       fats_g,
+      fiber_g,
+      entry_source,
+      nutrition_confidence,
+      food_items,
+      logged_at,
     } = req.body
 
     const allowedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
@@ -2907,7 +3166,7 @@ app.post('/api/nutrition', async (req, res) => {
       })
     }
 
-    const numericFields = { calories, protein_g, carbohydrates_g, fats_g }
+    const numericFields = { calories, protein_g, carbohydrates_g, fats_g, fiber_g }
     for (const [field, value] of Object.entries(numericFields)) {
       if (value !== undefined && value !== null && (!isValidNumber(Number(value), 0, 100000))) {
         return res.status(400).json({
@@ -2938,6 +3197,11 @@ app.post('/api/nutrition', async (req, res) => {
         fats_g === undefined || fats_g === null
           ? null
           : Number(fats_g),
+      fiber_g: fiber_g === undefined || fiber_g === null ? null : Number(fiber_g),
+      entry_source: entry_source || 'manual',
+      nutrition_confidence: nutrition_confidence || null,
+      food_items: Array.isArray(food_items) ? food_items : null,
+      logged_at: logged_at || undefined,
     }
 
     const { data, error } = await supabase
@@ -2988,7 +3252,7 @@ app.put('/api/nutrition/:id', async (req, res) => {
       return
     }
 
-    const allowedFields = ['meal_type', 'meal_name', 'calories', 'protein_g', 'carbohydrates_g', 'fats_g']
+    const allowedFields = ['meal_type', 'meal_name', 'calories', 'protein_g', 'carbohydrates_g', 'fats_g', 'fiber_g', 'entry_source', 'nutrition_confidence', 'food_items', 'logged_at']
     if (rejectUnknownFields(req.body, allowedFields).length > 0) {
       return res.status(400).json({ status: 'error', message: 'Request contains unsupported nutrition fields' })
     }
@@ -3000,13 +3264,18 @@ app.put('/api/nutrition/:id', async (req, res) => {
       protein_g,
       carbohydrates_g,
       fats_g,
+      fiber_g,
+      entry_source,
+      nutrition_confidence,
+      food_items,
+      logged_at,
     } = req.body
 
     if (!isNonEmptyString(meal_name, 120) || !isAllowedValue(meal_type, ['Breakfast', 'Lunch', 'Dinner', 'Snack'])) {
       return res.status(400).json({ status: 'error', message: 'Invalid meal details' })
     }
 
-    for (const [field, value] of Object.entries({ calories, protein_g, carbohydrates_g, fats_g })) {
+    for (const [field, value] of Object.entries({ calories, protein_g, carbohydrates_g, fats_g, fiber_g })) {
       if (value !== undefined && value !== null && !isValidNumber(Number(value), 0, 100000)) {
         return res.status(400).json({ status: 'error', message: `${field} must be a finite non-negative number` })
       }
@@ -3034,6 +3303,11 @@ app.put('/api/nutrition/:id', async (req, res) => {
           fats_g === undefined || fats_g === null
             ? null
             : Number(fats_g),
+        fiber_g: fiber_g === undefined || fiber_g === null ? null : Number(fiber_g),
+        entry_source: entry_source || 'manual',
+        nutrition_confidence: nutrition_confidence || null,
+        food_items: Array.isArray(food_items) ? food_items : null,
+        logged_at: logged_at || undefined,
       })
       .eq('id', nutritionId)
       .eq('user_id', user.id)
@@ -3392,8 +3666,22 @@ app.get('/api/auth/session', async (req, res) => {
     user: {
       id: user.id,
       email: user.email,
+      is_admin: isAdminUser(user),
     },
   })
+})
+
+app.post('/api/auth/refresh', authLimiter, async (req, res) => {
+  try {
+    const refreshToken = String(req.body?.refresh_token || '').trim()
+    if (!refreshToken || refreshToken.length > 4096) return res.status(400).json({ status: 'error', message: 'Refresh token is required.' })
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
+    if (error || !data?.session) return res.status(401).json({ status: 'error', message: 'Session refresh failed.' })
+    res.json({ status: 'success', session: data.session, user: data.user })
+  } catch (error) {
+    console.error('Auth refresh error:', error)
+    res.status(401).json({ status: 'error', message: 'Session refresh failed.' })
+  }
 })
 
 app.get('/api/auth/me', async (req, res) => {
@@ -3469,6 +3757,291 @@ app.post('/api/logout', async (req, res) => {
       status: 'error',
       message: 'Logout failed',
     })
+  }
+})
+
+
+// ============================================
+// INTELLIGENT NUTRITION API
+// ============================================
+
+app.post('/api/nutrition/analyze', generationLimiter, async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    if (!requireBodyObject(req, res)) return
+    const allowedFields = ['text', 'meal_type']
+    const unknownFields = rejectUnknownFields(req.body, allowedFields)
+    if (unknownFields.length) return res.status(400).json({ status: 'error', message: 'Request contains unsupported nutrition fields', fields: unknownFields })
+    const text = String(req.body.text || '').trim()
+    if (!text || text.length > 2000) return res.status(400).json({ status: 'error', message: 'Food entry must be between 1 and 2000 characters.' })
+    const allowedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+    if (req.body.meal_type !== undefined && !isAllowedValue(req.body.meal_type, allowedMealTypes)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid meal type.' })
+    }
+    const analysis = analyzeFoodText(text, req.body.meal_type || null)
+    res.json({ status: 'success', analysis })
+  } catch (error) {
+    console.error('Nutrition analysis error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to analyze the food entry.' })
+  }
+})
+
+app.get('/api/foods/search', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+  try {
+    const query = String(req.query.q || '').slice(0, 100)
+    res.json({ status: 'success', foods: searchFoods(query, 12) })
+  } catch (error) {
+    console.error('Food search error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to search food catalog.' })
+  }
+})
+
+async function getNutritionInputs(userId) {
+  const [profileResult, nutritionResult] = await Promise.all([
+    supabase.from('profiles').select('age,height_cm,weight_kg,fitness_level,primary_goal,workout_days_per_week,preferred_workout_duration').eq('id', userId).maybeSingle(),
+    supabase.from('nutrition_logs').select('*').eq('user_id', userId).order('logged_at', { ascending: false }),
+  ])
+  if (profileResult.error) throw new Error('Unable to fetch nutrition profile')
+  if (nutritionResult.error) throw new Error('Unable to fetch nutrition logs')
+  return { profile: profileResult.data || {}, nutritionLogs: nutritionResult.data || [] }
+}
+
+app.get('/api/nutrition/intelligence', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+  try {
+    const timeZone = getRequestTimeZone(req)
+    const requestedRange = Number(req.query.days || 28)
+    const rangeDays = Number.isFinite(requestedRange) ? Math.min(Math.max(requestedRange, 7), 365) : 28
+    const { profile, nutritionLogs } = await getNutritionInputs(user.id)
+    const intelligence = await buildNutritionIntelligence({ profile, nutritionLogs, timeZone, rangeDays })
+    res.json(intelligence)
+  } catch (error) {
+    console.error('Nutrition intelligence error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to build nutrition intelligence.' })
+  }
+})
+
+app.get('/api/nutrition/summary', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+  try {
+    const timeZone = getRequestTimeZone(req)
+    const requestedDays = Number(req.query.days || 7)
+    const rangeDays = Number.isFinite(requestedDays) ? Math.min(Math.max(requestedDays, 7), 365) : 7
+    const { profile, nutritionLogs } = await getNutritionInputs(user.id)
+    const intelligence = await buildNutritionIntelligence({ profile, nutritionLogs, timeZone, rangeDays })
+    res.json({ status: 'success', ...intelligence })
+  } catch (error) {
+    console.error('Nutrition summary error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to build nutrition summary.' })
+  }
+})
+
+app.get('/api/activity/daily', async (req, res) => {
+  const user = await authenticateUser(req, res)
+  if (!user) return
+
+  try {
+    const timeZone = getRequestTimeZone(req)
+    const range = String(req.query.range || '4w').toLowerCase()
+    const activity = await getDailyActivity(supabase, user.id, { timeZone, range })
+    res.json(activity)
+  } catch (error) {
+    console.error('Daily activity error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to load daily activity.' })
+  }
+})
+
+
+// ============================================
+// NUTRITION ML TRAINING / STATUS
+// ============================================
+
+app.get('/api/ml/nutrition-model', async (req, res) => {
+  const user = await authenticateAdmin(req, res)
+  if (!user) return
+  try {
+    const result = await getNutritionModelStatus()
+    res.json({ status: 'success', ...result })
+  } catch (error) {
+    res.status(503).json({ status: 'error', message: 'Nutrition ML service is unavailable.' })
+  }
+})
+
+app.post('/api/ml/train-nutrition', mlTrainingLimiter, async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  try {
+    const [profilesResult, nutritionResult] = await Promise.all([
+      supabase.from('profiles').select('id,age,height_cm,weight_kg,fitness_level,primary_goal,workout_days_per_week'),
+      supabase.from('nutrition_logs').select('user_id,calories,protein_g,carbohydrates_g,fats_g,fiber_g,logged_at').order('logged_at', { ascending: false }).limit(10000),
+    ])
+    if (profilesResult.error || nutritionResult.error) throw new Error('Unable to load training history.')
+    const profiles = profilesResult.data || []
+    const logsByUser = new Map()
+    for (const log of nutritionResult.data || []) {
+      if (!logsByUser.has(log.user_id)) logsByUser.set(log.user_id, [])
+      logsByUser.get(log.user_id).push(log)
+    }
+    const { buildNutritionHistory } = require('./services/nutrition/nutritionIntelligence')
+    const examples = []
+    for (const profile of profiles) {
+      const logs = logsByUser.get(profile.id) || []
+      if (logs.length < 4 || profile.age == null || profile.height_cm == null || profile.weight_kg == null) continue
+      const timeZone = String(req.body?.timezone || 'UTC').slice(0, 64)
+      const history = buildNutritionHistory(logs, profile, timeZone, 30)
+      const loggedDays = history.filter((day) => day.meals_logged > 0)
+      if (loggedDays.length < 4) continue
+      const loggingConsistency = (loggedDays.length / history.length) * 100
+      const averageCalorieAdherence = loggedDays.reduce((sum, day) => sum + (day.calorie_target ? Math.min((day.calories / day.calorie_target) * 100, 150) : 0), 0) / loggedDays.length
+      const averageProteinAdherence = loggedDays.reduce((sum, day) => sum + (day.protein_target ? Math.min((day.protein_g / day.protein_target) * 100, 150) : 0), 0) / loggedDays.length
+      for (let index = 0; index < loggedDays.length; index += 1) {
+        const day = loggedDays[index]
+        const calorieRatio = day.calorie_target ? day.calories / day.calorie_target : 0
+        const proteinRatio = day.protein_target ? day.protein_g / day.protein_target : 0
+        const adherent = day.meals_logged >= 2 && calorieRatio >= 0.8 && calorieRatio <= 1.15 && proteinRatio >= 0.8
+        examples.push({
+          features: {
+            age: profile.age, weight_kg: profile.weight_kg, height_cm: profile.height_cm, workout_days_per_week: profile.workout_days_per_week, primary_goal: profile.primary_goal,
+            logging_consistency: loggingConsistency, average_calorie_adherence: averageCalorieAdherence, average_protein_adherence: averageProteinAdherence,
+            recent_days: Math.min(index + 1, 30), adherence_rate: loggedDays.slice(0, index + 1).filter((item) => item.meals_logged >= 2 && item.calorie_target && (item.calories / item.calorie_target) >= 0.8 && (item.calories / item.calorie_target) <= 1.15 && item.protein_target && (item.protein_g / item.protein_target) >= 0.8).length / Math.max(index + 1, 1) * 100,
+          },
+          adherent,
+        })
+      }
+    }
+    if (examples.length < 8) return res.status(400).json({ status: 'error', message: 'At least 8 historical nutrition examples are required before training the behavioral model.' })
+    const result = await trainNutritionAdherenceModel(examples)
+    await writeAdminAudit({ userId: admin.id, action: 'train_nutrition_model', metadata: { samples: examples.length, members: profiles.length } })
+    res.json({ status: 'success', model: result, samples: examples.length })
+  } catch (error) {
+    console.error('Nutrition ML training error:', error)
+    res.status(503).json({ status: 'error', message: error.message || 'Unable to train the nutrition model.' })
+  }
+})
+
+// ============================================
+// ADMIN CONSOLE
+// ============================================
+
+app.get('/api/admin/overview', async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  try {
+    const [profilesResult, goalsResult, workoutsResult, nutritionResult, membershipsResult] = await Promise.all([
+      supabase.from('profiles').select('id,full_name,age,height_cm,weight_kg,fitness_level,primary_goal,workout_days_per_week,created_at'),
+      supabase.from('goals').select('id,user_id,goal_type,completed,weekly_workout_target,weekly_active_minute_target'),
+      supabase.from('workouts').select('id,user_id,completed,completed_at,duration_minutes,scheduled_date'),
+      supabase.from('nutrition_logs').select('id,user_id,calories,protein_g,logged_at'),
+      supabase.from('memberships').select('*'),
+    ])
+    for (const result of [profilesResult, goalsResult, workoutsResult, nutritionResult]) {
+      if (result.error) throw new Error('Unable to load member analytics.')
+    }
+    const profiles = profilesResult.data || []
+    const goals = goalsResult.data || []
+    const workouts = workoutsResult.data || []
+    const nutrition = nutritionResult.data || []
+    const memberships = membershipsResult.error ? [] : (membershipsResult.data || [])
+    const memberRows = profiles.map((profile) => {
+      const userWorkouts = workouts.filter((w) => w.user_id === profile.id)
+      const userNutrition = nutrition.filter((n) => n.user_id === profile.id)
+      const activeGoal = goals.find((g) => g.user_id === profile.id && !g.completed) || goals.find((g) => g.user_id === profile.id)
+      const membership = memberships.find((m) => m.user_id === profile.id) || null
+      return {
+        id: profile.id, full_name: profile.full_name, fitness_level: profile.fitness_level, primary_goal: activeGoal?.goal_type || profile.primary_goal,
+        workouts_completed: userWorkouts.filter((w) => w.completed).length,
+        active_minutes: userWorkouts.filter((w) => w.completed).reduce((sum, w) => sum + Number(w.duration_minutes || 0), 0),
+        meals_logged: userNutrition.length, membership, created_at: profile.created_at,
+      }
+    })
+    res.json({ status: 'success', admin: { id: admin.id, email: admin.email }, stats: { total_members: profiles.length, active_members: membershipsResult.error ? null : memberships.filter((m) => m.status === 'active').length, completed_workouts: workouts.filter((w) => w.completed).length, nutrition_entries: nutrition.length }, members: memberRows, memberships_available: !membershipsResult.error })
+  } catch (error) {
+    console.error('Admin overview error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to load admin overview.' })
+  }
+})
+
+app.get('/api/admin/members/:id', async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  if (!isValidUuid(req.params.id)) return res.status(400).json({ status: 'error', message: 'Invalid member ID.' })
+  try {
+    const targetUserId = req.params.id
+    const [profileResult, goalsResult, workoutsResult, nutritionResult, progressResult] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', targetUserId).single(),
+      supabase.from('goals').select('*').eq('user_id', targetUserId).order('id', { ascending: false }),
+      supabase.from('workouts').select('*').eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(100),
+      supabase.from('nutrition_logs').select('*').eq('user_id', targetUserId).order('logged_at', { ascending: false }).limit(100),
+      supabase.from('progress_logs').select('*').eq('user_id', targetUserId).order('recorded_at', { ascending: false }).limit(50),
+    ])
+    if (profileResult.error) return res.status(404).json({ status: 'error', message: 'Member not found.' })
+    if (goalsResult.error || workoutsResult.error || nutritionResult.error || progressResult.error) throw new Error('Unable to load member detail.')
+    res.json({ status: 'success', profile: profileResult.data, goals: goalsResult.data || [], workouts: workoutsResult.data || [], nutrition: nutritionResult.data || [], progress: progressResult.data || [] })
+  } catch (error) {
+    console.error('Admin member detail error:', error)
+    res.status(500).json({ status: 'error', message: 'Unable to load member detail.' })
+  }
+})
+
+app.put('/api/admin/members/:id/membership', async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  if (!isValidUuid(req.params.id)) return res.status(400).json({ status: 'error', message: 'Invalid member ID.' })
+  if (!requireBodyObject(req, res)) return
+  const allowed = ['membership_plan', 'status', 'start_date', 'end_date']
+  const unknown = rejectUnknownFields(req.body, allowed)
+  if (unknown.length) return res.status(400).json({ status: 'error', message: 'Unsupported membership fields.', fields: unknown })
+  const statuses = ['active', 'trial', 'paused', 'expired', 'cancelled']
+  if (req.body.status && !isAllowedValue(req.body.status, statuses)) return res.status(400).json({ status: 'error', message: 'Invalid membership status.' })
+  if (req.body.membership_plan !== undefined && !isNonEmptyString(req.body.membership_plan, 100)) return res.status(400).json({ status: 'error', message: 'Membership plan is invalid.' })
+  try {
+    const payload = { user_id: req.params.id, membership_plan: req.body.membership_plan || null, status: req.body.status || 'active', start_date: req.body.start_date || null, end_date: req.body.end_date || null, updated_at: new Date().toISOString() }
+    const { data, error } = await supabase.from('memberships').upsert(payload, { onConflict: 'user_id' }).select().single()
+    if (error) throw error
+    await writeAdminAudit({ userId: admin.id, action: 'update_membership', targetUserId: req.params.id, metadata: { status: payload.status, membership_plan: payload.membership_plan } })
+    res.json({ status: 'success', membership: data })
+  } catch (error) {
+    console.error('Membership update error:', error)
+    res.status(503).json({ status: 'error', message: 'Membership table is unavailable or the update failed. Apply the FitZone platform migration first.' })
+  }
+})
+
+app.get('/api/admin/audit', async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)
+    const { data, error } = await supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(limit)
+    if (error) return res.json({ status: 'success', available: false, audit: [] })
+    res.json({ status: 'success', available: true, audit: data || [] })
+  } catch (error) {
+    res.json({ status: 'success', available: false, audit: [] })
+  }
+})
+
+app.get('/api/admin/export', async (req, res) => {
+  const admin = await authenticateAdmin(req, res)
+  if (!admin) return
+  const type = String(req.query.type || 'members')
+  if (type !== 'members') return res.status(400).json({ status: 'error', message: 'Only member export is currently supported.' })
+  try {
+    const { data, error } = await supabase.from('profiles').select('id,full_name,age,height_cm,weight_kg,fitness_level,primary_goal,workout_days_per_week,created_at').order('created_at', { ascending: false })
+    if (error) throw error
+    const headers = ['id','full_name','age','height_cm','weight_kg','fitness_level','primary_goal','workout_days_per_week','created_at']
+    const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csv = [headers.join(','), ...(data || []).map((row) => headers.map((key) => escapeCsv(row[key])).join(','))].join('\n')
+    await writeAdminAudit({ userId: admin.id, action: 'export_members' })
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="fitzone-members.csv"')
+    res.send(csv)
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Unable to export member data.' })
   }
 })
 

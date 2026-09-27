@@ -1,0 +1,28 @@
+FitZone AI — Release Manifest — 2026-09-26
+
+Source basis
+- Uploaded source release: FitZone-AI-FINAL-2026-09-25.zip
+- Finalization date: 2026-09-26
+
+Finalization scope
+- No-fake personalization defaults removed from registration/profile surfaces.
+- Goal/profile canonical synchronization fixed.
+- Incomplete profile becomes an explicit intelligence state; personalized workout generation is gated.
+- Real activity/streak history preserved independent of selected range.
+- Timezone input validation tightened for activity/nutrition aggregation.
+- Dashboard, Nutrition and Assistant no longer display a fabricated default goal.
+- Regression and static verification coverage updated.
+
+Packaging exclusions
+- .git
+- node_modules
+- dist/build output
+- Python cache/bytecode
+- .env and local environment files
+- logs and temporary files
+
+Known verification limits
+- Full frontend Vite/ESLint execution was not completed in this sandbox because npm dependency installation timed out.
+- Dependency-loaded backend security-validation was not claimed as passing because the temporary dependency tree was incomplete.
+- No live Supabase, Gemini, ML-service or authenticated browser acceptance test was performed here.
+- Public deployment was not performed.

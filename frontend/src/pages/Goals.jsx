@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
+import { getFitnessTimeZone } from '../hooks/useFitnessBrain'
 
 const goalOptions = [
   { id: 'fat-loss', title: 'Fat Loss', description: 'Build a sustainable training routine focused on energy expenditure and consistency.' },
@@ -15,9 +16,11 @@ const goalOptions = [
 ]
 
 function Goals() {
-  const [selectedGoal, setSelectedGoal] = useState('general-fitness')
-  const [weeklyTarget, setWeeklyTarget] = useState(5)
-  const [activeMinutes, setActiveMinutes] = useState(200)
+  const [selectedGoal, setSelectedGoal] = useState(null)
+  const [weeklyTarget, setWeeklyTarget] = useState(null)
+  const [activeMinutes, setActiveMinutes] = useState(null)
+  const [currentWeeklyWorkouts, setCurrentWeeklyWorkouts] = useState(0)
+  const [currentWeeklyMinutes, setCurrentWeeklyMinutes] = useState(0)
 
   const [goalId, setGoalId] = useState(null)
 
@@ -36,10 +39,17 @@ function Goals() {
       setLoading(true)
       setError('')
 
-      const data = await api.get('/api/goals')
+      const [data, brain] = await Promise.all([
+        api.get('/api/goals'),
+        api.get(`/api/fitness/state?timezone=${encodeURIComponent(getFitnessTimeZone())}`).catch(() => null),
+      ])
 
-      if (data.goals && data.goals.length > 0) {
-        const goal = data.goals[0]
+      const brainGoal = brain?.user_state?.goal_state?.active_goal || null
+      setCurrentWeeklyWorkouts(Number(brain?.user_state?.goal_state?.current_weekly_workouts || 0))
+      setCurrentWeeklyMinutes(Number(brain?.user_state?.goal_state?.current_weekly_active_minutes || 0))
+
+      if (brainGoal || (data.goals && data.goals.length > 0)) {
+        const goal = brainGoal || data.goals[0]
 
         setGoalId(goal.id)
 
@@ -103,6 +113,7 @@ function Goals() {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       queryClient.invalidateQueries({ queryKey: ['intelligence'] })
+    queryClient.invalidateQueries({ queryKey: ['fitness-brain'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['recommendation'] })
     } catch (err) {
@@ -145,9 +156,10 @@ function Goals() {
   const selectedGoalData =
     goalOptions.find(
       (goal) => goal.id === selectedGoal
-    )
+    ) || null
 
-  const goalCompletion = Math.min(100, Math.round(((weeklyTarget / 7) * 50) + ((activeMinutes / 500) * 50)))
+  const workoutProgress = weeklyTarget ? Math.min(100, Math.round((currentWeeklyWorkouts / Number(weeklyTarget)) * 100)) : null
+  const minuteProgress = activeMinutes ? Math.min(100, Math.round((currentWeeklyMinutes / Number(activeMinutes)) * 100)) : null
 
   return (
     <main className="goals-page">
@@ -169,22 +181,18 @@ function Goals() {
         </div>
 
         <div className="goal-score-card">
-          <span>GOAL COMPLETION</span>
+          <span>CURRENT WEEK ACTIVITY</span>
 
-          <strong>{goalCompletion}%</strong>
+          <strong>{currentWeeklyWorkouts} workout{currentWeeklyWorkouts === 1 ? '' : 's'}</strong>
 
           <div className="goal-score-track">
-            <div
-              style={{
-                width: `${goalCompletion}%`,
-              }}
-            ></div>
+            <div style={{ width: `${workoutProgress ?? 0}%` }}></div>
           </div>
 
           <p>
-            {goalCompletion >= 75
-              ? 'You are making strong progress.'
-              : 'Keep building your consistency.'}
+            {weeklyTarget
+              ? `${currentWeeklyWorkouts} of ${weeklyTarget} configured workouts this week.`
+              : 'No saved weekly workout target yet. Set one below to track goal progress.'}
           </p>
         </div>
       </section>
@@ -264,7 +272,7 @@ function Goals() {
                   </span>
 
                   <h3>
-                    {weeklyTarget} workouts
+                    {weeklyTarget === null ? 'Not set' : `${weeklyTarget} workouts`}
                   </h3>
                 </div>
 
@@ -275,7 +283,7 @@ function Goals() {
                 type="range"
                 min="2"
                 max="7"
-                value={weeklyTarget}
+                value={weeklyTarget ?? 3}
                 onChange={(event) => {
                   setWeeklyTarget(
                     Number(event.target.value)
@@ -290,8 +298,7 @@ function Goals() {
               </div>
 
               <p>
-                Number of workouts you want to
-                complete each week.
+                Number of workouts you want to complete each week. Current week: {currentWeeklyWorkouts} completed.
               </p>
             </article>
 
@@ -303,7 +310,7 @@ function Goals() {
                   </span>
 
                   <h3>
-                    {activeMinutes} minutes
+                    {activeMinutes === null ? 'Not set' : `${activeMinutes} minutes`}
                   </h3>
                 </div>
 
@@ -315,7 +322,7 @@ function Goals() {
                 min="60"
                 max="500"
                 step="20"
-                value={activeMinutes}
+                value={activeMinutes ?? 180}
                 onChange={(event) => {
                   setActiveMinutes(
                     Number(event.target.value)
@@ -330,8 +337,7 @@ function Goals() {
               </div>
 
               <p>
-                Your desired amount of active training
-                time each week.
+                Your desired amount of active training time each week. Current week: {currentWeeklyMinutes} minutes.
               </p>
             </article>
           </div>
@@ -345,7 +351,7 @@ function Goals() {
               </p>
 
               <h2>
-                {selectedGoalData?.title}
+                {selectedGoalData?.title || 'No primary goal selected'}
               </h2>
             </div>
 
@@ -354,7 +360,7 @@ function Goals() {
                 <span>WORKOUTS</span>
 
                 <strong>
-                  {weeklyTarget}/week
+                  {weeklyTarget === null ? 'Not set' : `${weeklyTarget}/week`}
                 </strong>
               </div>
 
@@ -362,15 +368,17 @@ function Goals() {
                 <span>ACTIVE TIME</span>
 
                 <strong>
-                  {activeMinutes} min
+                  {activeMinutes === null ? 'Not set' : `${activeMinutes} min`}
                 </strong>
+                <small>{minuteProgress === null ? `${currentWeeklyMinutes} min this week` : `${currentWeeklyMinutes} / ${activeMinutes} this week`}</small>
               </div>
             </div>
 
             <button
               type="submit"
               className="primary-button"
-              disabled={saving}
+              disabled={saving || !selectedGoal}
+              title={!selectedGoal ? 'Select a primary goal before saving.' : undefined}
             >
               {saving
                 ? 'Saving…'
@@ -378,6 +386,7 @@ function Goals() {
                   ? 'Goals Saved ✓'
                   : 'Save Goals'}
             </button>
+            {!selectedGoal && <p className="goal-save-hint">Select a primary goal before saving. Weekly targets are optional.</p>}
           </div>
 
           {saved && (
