@@ -1,65 +1,90 @@
-# FitZone AI
+# FitZone AI 🏋️‍♂️
 
 ## Adaptive Fitness Intelligence Platform
 
-FitZone AI is a full-stack fitness intelligence platform that combines user goals, workout activity, progress, nutrition data, recommendation logic, and machine-learning signals to continuously adapt the user's fitness experience.
+> A fitness platform that doesn't just give you a workout — it tries to understand what you need next.
 
-The project is built around a simple feedback loop:
+FitZone AI is a full-stack fitness intelligence platform that connects **goals, workouts, progress, nutrition, recommendations, machine-learning signals, and AI assistance** into one adaptive system.
 
-User Profile + Goals
-        ↓
-Current Fitness State
-        ↓
-Fitness Brain
-        ↓
-Next Best Action
-        ↓
-Workout / Guidance
-        ↓
-Actual User Activity
-        ↓
-Progress & Outcomes
-        ↓
-Updated Fitness State
-        ↓
-Next Recommendation
+The core idea is simple:
+
+**Observe → Understand → Recommend → Act → Measure → Adapt**
+
+---
+
+## 🚀 What is FitZone AI?
+
+Most fitness applications can show workouts, track progress, calculate calories, or provide predefined plans.
+
+FitZone AI focuses on the connection between all of these pieces.
+
+The application continuously builds a picture of the user's current fitness state using information such as:
+
+- 🎯 Fitness goals
+- 💪 Fitness level
+- 📅 Training frequency
+- 🏋️ Workout history
+- ✅ Completed activity
+- ⏱️ Active minutes
+- 📆 Active days
+- 🔥 Readiness
+- 🍎 Nutrition
+- 📊 Weekly progress
+- 🧠 Recommendation outcomes
+- 🤖 Available ML signals
+
+That information feeds the application's **Fitness Brain**, which determines what should happen next.
+
+### The Core Feedback Loop
+
+    User Profile + Goals
+            ↓
+    Current Fitness State
+            ↓
+       Fitness Brain
+            ↓
+      Next Best Action
+            ↓
+      Workout / Guidance
+            ↓
+      Actual User Activity
+            ↓
+      Progress & Outcomes
+            ↓
+    Updated Fitness State
+            ↓
+      Next Recommendation
+            ↺
 
 The goal is not simply to generate more fitness content.
 
-The goal is to make the application state-aware.
+> **The goal is to make the application state-aware.**
 
-For example, if a user is behind their configured weekly activity target, the system can identify that state and prioritize an appropriate action instead of simply presenting another generic workout.
+---
 
-## Project Overview
+## ✨ Key Features
 
-Traditional fitness applications often provide predefined workouts, static plans, dashboards, and calculators.
+| Feature | Description |
+|---|---|
+| 🧠 Fitness Brain | Builds a structured view of the user's current fitness state |
+| 🎯 Adaptive Recommendations | Determines the next actionable recommendation |
+| 🏋️ Workout System | Connects recommendations with actual workouts |
+| 📈 Progress Tracking | Tracks workouts, active minutes, active days, exercises and streaks |
+| 🍎 Nutrition Intelligence | Connects nutrition targets with the active fitness goal |
+| 🤖 AI Assistant | Explains fitness decisions using conversational AI |
+| 🧠 ML Service | Provides prediction infrastructure and ML signals |
+| 🌱 Cold-Start Logic | Handles users without enough historical training data |
+| 🔐 Security | Authentication, authorization, validation, CORS and security controls |
+| 🧪 Automated Testing | Regression, integration, security and behavior tests |
+| 👤 Personalization | Uses profile, goals and activity context throughout the application |
 
-FitZone AI approaches the problem differently.
+---
 
-The application continuously combines information about the user's:
+# 🧠 The Fitness Brain
 
-- Fitness goal
-- Fitness level
-- Training frequency
-- Workout history
-- Completed activity
-- Weekly progress
-- Active minutes
-- Active days
-- Readiness
-- Nutrition
-- Recommendation outcomes
-- Available machine-learning signals
+The **Fitness Brain** is the central intelligence layer of FitZone AI.
 
-This information is used to construct a structured representation of the user's current fitness state.
-
-That state is then used across the application to keep recommendations, progress, nutrition, and assistant responses consistent.
-
-## Core Concept: The Fitness Brain
-
-The Fitness Brain is the central intelligence layer of FitZone AI.
-
-It combines information from multiple parts of the application to build a structured representation of the user's current state.
+Instead of allowing every page to independently decide what the user's current state is, the system builds a structured representation that can be shared across the application.
 
 The state can include:
 
@@ -74,41 +99,31 @@ The state can include:
 - Readiness
 - Nutrition information
 - Historical recommendation outcomes
-- Machine-learning completion signals when available
+- Available machine-learning completion signals
 
-The resulting state is used to determine:
+### Decision Flow
 
-Current State
-        ↓
-Priority
-        ↓
-Next Best Action
-        ↓
-Supporting Explanation
+    Current State
+          ↓
+       Priority
+          ↓
+    Next Best Action
+          ↓
+    Supporting Explanation
 
-The same intelligence state is consumed by important parts of the application so that the Dashboard, AI Plan, Progress, Nutrition, and Assistant do not independently create conflicting versions of the user's current state.
+This intelligence state can then be consumed by:
 
-## Recommendation Architecture
+**Dashboard → AI Plan → Progress → Nutrition → AI Assistant**
 
-The recommendation pipeline is separated into multiple layers.
+That keeps the different parts of the application aligned.
 
-User & Activity Data
-        ↓
-Fitness Context
-        ↓
-+-------------------+-------------------+
-|                   |                   |
-Rule Logic       ML Signal       Historical Evidence
-|                   |                   |
-+-------------------+-------------------+
-                    ↓
-          Recommendation Logic
-                    ↓
-             Next Best Action
-                    ↓
-          Workout / User Guidance
+---
 
-The recommendation system can combine:
+# 🎯 Recommendation System
+
+The recommendation engine combines multiple sources of information instead of depending on a single signal.
+
+It can use:
 
 1. Deterministic fitness rules
 2. Machine-learning completion signals
@@ -116,35 +131,57 @@ The recommendation system can combine:
 4. Current user state
 5. Goal and activity context
 
-The machine-learning signal is treated as an input to the decision process rather than as an unquestionable answer.
+### Recommendation Pipeline
+
+    User & Activity Data
+            ↓
+       Fitness Context
+            ↓
+    ┌───────────────────────┐
+    │ Rules │ ML │ History  │
+    └───────────────────────┘
+            ↓
+    Recommendation Logic
+            ↓
+      Next Best Action
+            ↓
+    Workout / User Guidance
+
+The machine-learning signal is treated as an **input** to the decision process.
+
+It is not automatically treated as the final answer.
 
 Historical learning is based on recorded evidence rather than assuming that a recommendation was successful simply because it was displayed.
 
-## Recommendation Is Not Completion
+---
 
-One of the most important design decisions in FitZone AI is keeping recommendation state separate from actual workout completion.
+# ⚠️ Recommendation ≠ Completion
 
-The intended lifecycle is:
+This is one of the most important engineering decisions in FitZone AI.
 
-Recommendation
-      ↓
-Workout selected or generated
-      ↓
-User opens workout
-      ↓
-User performs workout
-      ↓
-Actual completion recorded
-      ↓
-Progress updated
-      ↓
-Recommendation outcome evaluated
+A recommendation and a completed workout are **two different events**.
 
-A user accepting or viewing a recommendation does not automatically complete the workout.
+### Intended Lifecycle
 
-Actual completion is tied to the workout lifecycle and recorded completion data.
+    Recommendation
+          ↓
+    Workout Selected
+          ↓
+    User Opens Workout
+          ↓
+    User Performs Workout
+          ↓
+    Actual Completion Recorded
+          ↓
+    Progress Updated
+          ↓
+    Recommendation Outcome Evaluated
 
-This prevents the application from artificially increasing:
+Accepting or viewing a recommendation does **not** automatically complete the workout.
+
+Actual completion belongs to the workout lifecycle.
+
+This prevents artificial increases in:
 
 - Completed workouts
 - Active minutes
@@ -153,13 +190,15 @@ This prevents the application from artificially increasing:
 - Progress
 - Historical training evidence
 
-The system does not automatically mark the latest recommendation as completed.
+> **A recommendation can suggest an action. Only actual activity can create completion evidence.**
 
-## Personalized Workout Engine
+---
 
-FitZone AI connects recommendations to actual workouts.
+# 🏋️ Personalized Workout Experience
 
-The workout experience can use information such as:
+FitZone AI connects recommendations to actual workouts instead of treating them as unrelated content.
+
+Workout context can include:
 
 - Fitness goal
 - Fitness level
@@ -174,28 +213,28 @@ Workout information can include:
 - Exercises
 - Sets
 - Repetitions
-- Duration where applicable
+- Duration
 - Rest periods
 
-The workout is connected to the recommendation context instead of being treated as an unrelated piece of generated content.
+### Recommendation → Workout → Feedback
 
-The important distinction is:
+    Recommendation
+          ↓
+       Workout
+          ↓
+    Actual User Activity
+          ↓
+    Recorded Completion
+          ↓
+    Future Intelligence
 
-Recommendation
-        ↓
-Workout
-        ↓
-Actual User Activity
-        ↓
-Recorded Completion
-        ↓
-Future Intelligence
+This makes the workout part of the feedback loop.
 
-## AI Assistant
+---
+
+# 🤖 AI Assistant
 
 The AI Assistant provides a conversational interface over the user's fitness state.
-
-Instead of operating as an isolated chatbot, it receives structured context from the adaptive intelligence system used elsewhere in the application.
 
 It can explain information such as:
 
@@ -208,51 +247,55 @@ It can explain information such as:
 - Progress information
 - Nutrition-related context
 
-The architecture intentionally separates decision-making from explanation.
+The architecture intentionally separates **decision-making** from **explanation**.
 
-Decision
-    ≠
-Explanation
+> ### Decision ≠ Explanation
 
 The Fitness Brain determines the structured decision.
 
 Gemini helps explain that decision in natural language.
 
-This means the language model is not the hidden decision-maker for the core fitness recommendation.
+This means the language model is not intended to secretly become the decision-maker for the core recommendation system.
 
-## Gemini Integration
+---
 
-Gemini is used as the natural-language layer of the application.
+# ✨ Gemini Integration
 
-Its primary role is to explain and communicate structured application decisions.
+Gemini acts as the natural-language layer of FitZone AI.
 
-The architecture follows:
+### Architecture
 
-Recorded Data
-        ↓
-Calculated State
-        ↓
-Recommendation
-        ↓
-AI-generated Explanation
+    Recorded Data
+          ↓
+    Calculated State
+          ↓
+    Recommendation
+          ↓
+    AI-generated Explanation
 
-This separation makes the system easier to reason about and prevents an LLM-generated response from becoming the application's source of truth.
+The application logic remains the source of truth.
 
-## Machine Learning Service
+Gemini's role is to make the resulting information easier for the user to understand.
 
-FitZone AI includes a separate Python/FastAPI machine-learning service.
+---
 
-React Frontend
-        ↓
-Node / Express Backend
-        ↓
-Personalization Client
-        ↓
-Python FastAPI ML Service
-        ↓
-Prediction Signal
+# 🤖 Machine Learning Service
 
-The ML service provides functionality around areas such as:
+FitZone AI includes a separate **Python + FastAPI machine-learning service**.
+
+### ML Architecture
+
+    React Frontend
+          ↓
+    Node / Express Backend
+          ↓
+    Personalization Client
+          ↓
+    Python FastAPI ML Service
+          ↓
+    Prediction Signal
+
+The ML service provides infrastructure around areas such as:
 
 - Workout completion prediction
 - Nutrition adherence prediction
@@ -260,17 +303,13 @@ The ML service provides functionality around areas such as:
 - Model information
 - Service health
 
-The completion-prediction pipeline supports a cold-start state when a trained model is not available.
+The completion-prediction pipeline also supports a cold-start state when sufficient training evidence is not available.
 
-This is intentional.
+---
 
-The application does not claim that a model is trained when sufficient evidence does not exist.
+# 🌱 Cold-Start Intelligence
 
-The ML service can therefore operate alongside deterministic intelligence while training evidence is being accumulated.
-
-## Cold-Start Intelligence
-
-A recommendation system cannot assume that a new user already has enough historical data for reliable personalization.
+A new user does not automatically have enough historical data for reliable ML personalization.
 
 FitZone AI therefore distinguishes between:
 
@@ -280,25 +319,27 @@ FitZone AI therefore distinguishes between:
 - Historical training evidence
 - Learned personalization
 
-A simplified flow is:
+### Cold-Start Flow
 
-Insufficient ML Evidence
-        ↓
-Cold-Start State
-        ↓
-Deterministic Fitness Intelligence
-        ↓
-Real User Outcomes
-        ↓
-Training Evidence
-        ↓
-Model Training
-        ↓
-ML Signal When Available
+    Insufficient ML Evidence
+            ↓
+       Cold-Start State
+            ↓
+    Deterministic Intelligence
+            ↓
+      Real User Outcomes
+            ↓
+       Training Evidence
+            ↓
+        Model Training
+            ↓
+    ML Signal When Available
 
-This prevents the system from presenting an unverified model as if it were already fully personalized.
+This prevents the application from presenting an unverified model as if it were already fully personalized.
 
-## Nutrition Intelligence
+---
+
+# 🍎 Nutrition Intelligence
 
 Nutrition is connected to the user's fitness context rather than being treated as a completely isolated calculator.
 
@@ -314,11 +355,13 @@ The nutrition system can work with:
 
 The active goal is considered when determining nutrition inputs so that planning does not depend entirely on potentially stale profile information.
 
-## Progress Tracking
+---
 
-FitZone AI tracks actual activity over time and exposes it through the Progress experience.
+# 📈 Progress Tracking
 
-Tracked information includes:
+FitZone AI tracks actual activity over time.
+
+Progress includes information such as:
 
 - Completed workouts
 - Active minutes
@@ -328,15 +371,17 @@ Tracked information includes:
 - Weekly targets
 - Historical activity
 
-The system also accounts for older completed workout records where newer completion timestamp fields may not have been populated.
+Older valid workout records are also taken into account when newer completion timestamp fields are unavailable.
 
-Valid historical activity should remain part of the user's history rather than silently disappearing because the data was recorded by an earlier version of the application.
+> **Valid historical activity should remain valid history.**
 
-## Dashboard
+---
+
+# 📊 Dashboard
 
 The Dashboard provides a high-level view of the user's current fitness state.
 
-It brings together information such as:
+It brings together:
 
 - Weekly workout progress
 - Active minutes
@@ -348,98 +393,110 @@ It brings together information such as:
 - Nutrition progress
 - Recent activity
 
-The Dashboard is designed to answer one practical question:
+The Dashboard is designed around one practical question:
 
-"What is happening with my fitness right now, and what should I focus on next?"
+> **"What is happening with my fitness right now, and what should I focus on next?"**
 
-## Main Application Areas
+---
 
-### Dashboard
+# 🧩 Application Areas
+
+### 🏠 Dashboard
 
 Central overview of the user's current fitness state and next action.
 
-### My Workout
+### 🏋️ My Workout
 
-Displays the user's workout, exercises, duration, difficulty, and completion state.
+Displays workouts, exercises, duration, difficulty and completion state.
 
-### AI Plan
+### 🧠 AI Plan
 
-Shows the current adaptive recommendation and the reasoning behind it.
+Shows the current adaptive recommendation and its reasoning.
 
-### Progress
+### 📈 Progress
 
-Tracks historical activity, weekly progress, active minutes, exercises, and streaks.
+Tracks historical activity, weekly progress, active minutes, exercises and streaks.
 
-### Nutrition
+### 🍎 Nutrition
 
 Displays calorie and protein targets along with nutrition progress.
 
-### Goals
+### 🎯 Goals
 
 Allows users to define and update fitness objectives and weekly targets.
 
-### AI Assistant
+### 🤖 AI Assistant
 
 Provides conversational explanations using the user's current fitness context.
 
-### Profile
+### 👤 Profile
 
 Stores personalization information used throughout the platform.
 
-### Membership
+### 💳 Membership
 
-Provides the application's membership and onboarding experience.
+Provides membership and onboarding functionality.
 
-### Admin
+### 🛡️ Admin
 
-Provides administrative functionality available to authorized users.
+Provides administrative functionality for authorized users.
 
-### Authentication
+### 🔐 Authentication
 
 Handles authentication and protected application access.
 
-## System Architecture
+---
 
-                         +----------------------+
-                         |    React + Vite      |
-                         |      Frontend        |
-                         +----------+-----------+
-                                    |
-                                    v
-                         +----------------------+
-                         |    Node / Express    |
-                         |       Backend        |
-                         +----------+-----------+
-                                    |
-            +-----------------------+-----------------------+
-            |                       |                       |
-            v                       v                       v
-     Fitness Brain            Gemini Layer             Supabase
-     Intelligence             Explanation            PostgreSQL
-            |
-            v
- Recommendation Logic
-            |
-       +----+----+
-       |         |
-       v         v
-     Rules      ML
-                 |
-                 v
-       Python FastAPI Service
-                 |
-                 v
-        Prediction Signal
-                 |
-                 v
+# 🏗️ System Architecture
+
+    ┌─────────────────────────────┐
+    │       React + Vite         │
+    │          Frontend          │
+    └──────────────┬──────────────┘
+                   │
+                   ▼
+    ┌─────────────────────────────┐
+    │      Node / Express         │
+    │          Backend            │
+    └──────────────┬──────────────┘
+                   │
+          ┌────────┼────────┐
+          │        │        │
+          ▼        ▼        ▼
+    ┌──────────┐ ┌────────┐ ┌──────────────┐
+    │ Fitness  │ │ Gemini │ │   Supabase   │
+    │  Brain   │ │ Layer  │ │  PostgreSQL  │
+    └────┬─────┘ └────────┘ └──────────────┘
+         │
+         ▼
+    ┌─────────────────────────────┐
+    │    Recommendation Logic     │
+    └──────────────┬──────────────┘
+                   │
+             ┌─────┴─────┐
+             ▼           ▼
+          Rules          ML
+             │           │
+             └─────┬─────┘
+                   ▼
+    ┌─────────────────────────────┐
+    │   Python FastAPI ML Service │
+    └──────────────┬──────────────┘
+                   │
+                   ▼
+          Prediction Signal
+                   │
+                   ▼
           Next Best Action
-                 |
-                 v
-        Personalized Workout
+                   │
+                   ▼
+          Workout / Guidance
 
-## Technology Stack
+---
 
-### Frontend
+# 🛠️ Technology Stack
+
+## Frontend
 
 - React
 - Vite
@@ -448,20 +505,19 @@ Handles authentication and protected application access.
 - CSS
 - ESLint
 
-### Backend
+## Backend
 
 - Node.js
 - Express
-- JavaScript
 - REST APIs
 - Supabase
 - PostgreSQL
-- Authentication and authorization
+- Authentication & Authorization
 - Helmet
 - CORS
-- Request validation
+- Request Validation
 
-### AI and Machine Learning
+## AI & Machine Learning
 
 - Python
 - FastAPI
@@ -470,7 +526,7 @@ Handles authentication and protected application access.
 - Machine-learning prediction services
 - Google Gemini
 
-### Development and Testing
+## Development & Testing
 
 - Git
 - GitHub
@@ -480,9 +536,12 @@ Handles authentication and protected application access.
 - Frontend linting
 - Production build verification
 
-## Project Structure
+---
+
+# 📁 Project Structure
 
     FitZone-AI/
+    │
     ├── frontend/
     │   ├── src/
     │   │   ├── components/
@@ -514,57 +573,72 @@ Handles authentication and protected application access.
     ├── README.md
     └── PROJECT_STATE.md
 
-## End-to-End User Flow
+---
 
-### 1. Onboarding
+# 🔄 End-to-End Flow
+
+### 01 — Onboarding
 
 The user provides profile and fitness information.
 
-### 2. Goal Selection
+### 02 — Goal Selection
 
-The user selects an active fitness goal and relevant weekly targets.
+The user selects an active fitness goal and weekly targets.
 
-### 3. State Construction
+### 03 — State Construction
 
-FitZone AI combines profile, goals, activity, workout history, and available signals.
+FitZone AI combines profile, goals, activity, workout history and available signals.
 
-### 4. Intelligence Analysis
+### 04 — Intelligence Analysis
 
 The Fitness Brain evaluates the current state.
 
-### 5. Recommendation
+### 05 — Recommendation
 
 The system produces the next actionable recommendation.
 
-### 6. Workout
+### 06 — Workout
 
 The user performs the recommended or assigned workout.
 
-### 7. Completion
+### 07 — Completion
 
 The workout is recorded only when actual completion occurs.
 
-### 8. Feedback
+### 08 — Feedback
 
 The completed activity becomes new evidence.
 
-### 9. Adaptation
+### 09 — Adaptation
 
 Future recommendations can use the updated state.
 
-The core feedback loop is:
+### Complete Feedback Loop
 
-Observe → Analyze → Recommend → Act → Measure → Adapt
+    Observe
+       ↓
+    Analyze
+       ↓
+    Recommend
+       ↓
+    Act
+       ↓
+    Measure
+       ↓
+    Adapt
+       ↺
 
-## Engineering Decisions
+---
 
-### Recommendation and Completion Are Separate
+# 🔐 Engineering Principles
+
+## Recommendation and Completion Are Separate
 
 A recommendation event and a completed workout represent different facts.
 
 Keeping them separate prevents false progress.
 
-### Centralized Intelligence State
+## Centralized Intelligence State
 
 Multiple intelligence-driven UI surfaces consume the same structured state.
 
@@ -576,33 +650,35 @@ This reduces inconsistencies between:
 - Nutrition
 - Assistant
 
-### Timezone-Aware Activity
+## Timezone-Aware Activity
 
 Weekly activity is evaluated with timezone context rather than blindly treating all activity as UTC-based.
 
-### Historical Compatibility
+## Historical Compatibility
 
 Older valid workout records remain usable when newer completion timestamp fields are unavailable.
 
-### Canonical Active Goal
+## Canonical Active Goal
 
 The active goal is resolved from the authoritative goal state so that nutrition and intelligence remain aligned.
 
-### Cold-Start Awareness
+## Cold-Start Awareness
 
-The system distinguishes between genuine learned personalization and baseline behavior when insufficient training data exists.
+The system distinguishes between genuine learned personalization and baseline behavior when sufficient training data does not exist.
 
-### Decision and Explanation Are Separate
+## Decision and Explanation Are Separate
 
 Gemini explains structured application decisions instead of silently replacing the decision layer.
 
-### Actual User Activity Is Authoritative
+## Actual User Activity Is Authoritative
 
 A recommendation, prediction, or assistant response does not create workout completion by itself.
 
-## Data Integrity Rules
+---
 
-The following rules are intentionally maintained throughout the application:
+# 🛡️ Data Integrity
+
+FitZone AI intentionally maintains several rules across the application:
 
 1. A recommendation is not a completed workout.
 2. Workout completion must come from the workout lifecycle.
@@ -613,11 +689,15 @@ The following rules are intentionally maintained throughout the application:
 7. Gemini explains application decisions rather than replacing the decision layer.
 8. ML personalization should only be described as learned when the underlying evidence and model path support that claim.
 
-## Security
+These rules are important because an adaptive application is only as useful as the data it learns from.
 
-Security is treated as part of the application's engineering rather than only as a final deployment task.
+---
 
-The project includes controls and validation around:
+# 🔒 Security
+
+Security is treated as part of the application architecture.
+
+The project includes controls around:
 
 - Authentication
 - Authorization
@@ -631,11 +711,13 @@ The project includes controls and validation around:
 
 Security-related behavior is also covered by automated tests.
 
-## Testing
+---
+
+# 🧪 Testing
 
 The project includes automated testing across important application layers.
 
-Test coverage includes areas such as:
+Coverage includes:
 
 - Adaptive intelligence
 - Fitness Brain behavior
@@ -655,7 +737,7 @@ Test coverage includes areas such as:
 Frontend verification includes:
 
 - ESLint
-- Production build
+- Production build verification
 
 ### Backend Tests
 
@@ -674,11 +756,13 @@ Frontend verification includes:
 
 The ML service also exposes a health endpoint for local service verification.
 
-## Local Development
+---
 
-### Prerequisites
+# 💻 Local Development
 
-Install or configure:
+## Prerequisites
+
+You will need:
 
 - Node.js
 - npm
@@ -687,22 +771,22 @@ Install or configure:
 - Required Gemini configuration
 - Git
 
-### Clone the Repository
+## Clone the Repository
 
     git clone https://github.com/Nitishypujar/FitZone-AI.git
     cd FitZone-AI
 
-### Frontend
+## Start the Frontend
 
     cd frontend
     npm install
     npm run dev
 
-The Vite development server normally runs on:
+Frontend:
 
     http://localhost:5173
 
-### Backend
+## Start the Backend
 
 Open another terminal:
 
@@ -710,11 +794,11 @@ Open another terminal:
     npm install
     npm start
 
-The backend normally runs on:
+Backend:
 
     http://localhost:5000
 
-### AI Service
+## Start the AI Service
 
 Open another terminal:
 
@@ -722,19 +806,21 @@ Open another terminal:
     pip install -r requirements.txt
     python main.py
 
-The ML service normally runs on:
+ML service:
 
     http://127.0.0.1:8000
 
-FastAPI documentation is available through:
+FastAPI documentation:
 
     http://127.0.0.1:8000/docs
 
 Configure the required environment variables before starting the services.
 
-Do not commit API keys, database credentials, JWT secrets, or other private configuration.
+> Never commit API keys, database credentials, JWT secrets, or other private configuration.
 
-## Environment Configuration
+---
+
+# ⚙️ Environment Configuration
 
 The application requires environment-specific configuration for services such as:
 
@@ -744,11 +830,15 @@ The application requires environment-specific configuration for services such as
 - ML service communication
 - Backend configuration
 
-Environment files should be kept local and sensitive credentials must never be committed to the repository.
+Keep environment files local.
 
-## Current ML State
+Sensitive credentials should never be committed to the repository.
 
-FitZone AI supports an ML service and prediction infrastructure, but the project intentionally distinguishes between:
+---
+
+# 🧠 Current ML Approach
+
+FitZone AI intentionally distinguishes between:
 
 - Cold-start behavior
 - Deterministic intelligence
@@ -756,25 +846,15 @@ FitZone AI supports an ML service and prediction infrastructure, but the project
 - Actual learned personalization
 - Historical training data
 
-This distinction is important because the existence of an ML endpoint does not by itself mean that the system has learned a personalized model for every user.
+The existence of an ML endpoint does not automatically mean that the system has learned a personalized model for every user.
 
-The system can therefore operate with deterministic intelligence while sufficient training evidence is being accumulated.
+This allows the application to continue operating with deterministic intelligence while sufficient training evidence is being accumulated.
 
-## Current Limitations
+---
 
-FitZone AI is currently a local/development portfolio project.
+# 🚀 Future Direction
 
-It is not being presented as a publicly deployed production service.
-
-The ML component can operate in cold-start mode when sufficient training evidence is unavailable.
-
-The project also does not claim to provide medical-grade or clinical fitness recommendations.
-
-Fitness information provided by the application should be treated as general fitness guidance and not as medical advice.
-
-## Future Improvements
-
-Potential future improvements include:
+As the project evolves, areas I want to explore include:
 
 - Larger real-world training datasets
 - More extensive ML evaluation
@@ -789,27 +869,23 @@ Potential future improvements include:
 - Accessibility improvements
 - Performance optimization
 
-These are future directions and are not presented as currently implemented features.
+These represent future directions rather than claims about features that are already implemented.
 
-## What This Project Taught Me
+---
 
-The most challenging part of FitZone AI was not building individual pages.
+# 💡 What Building FitZone AI Taught Me
 
-It was keeping the different parts of the system consistent.
+The hardest part of FitZone AI was not creating individual pages.
+
+It was making the different parts of the system agree with each other.
 
 For example:
 
-A recommendation
-      ≠
-A completed workout
+> **Recommendation ≠ Completed Workout**
 
-An ML prediction
-      ≠
-A guaranteed outcome
+> **ML Prediction ≠ Guaranteed Outcome**
 
-An AI explanation
-      ≠
-The application's source of truth
+> **AI Explanation ≠ Application Source of Truth**
 
 Building around these distinctions required working across:
 
@@ -825,35 +901,52 @@ Building around these distinctions required working across:
 - Testing
 - System architecture
 
-The project reinforced an important engineering principle:
+The project reinforced an engineering principle that became central to the way I approached the system:
 
-Reliable data
-      ↓
-Clear state
-      ↓
-Decision logic
-      ↓
-Valid action
-      ↓
-Feedback
-      ↓
-Adaptation
+    Reliable Data
+          ↓
+      Clear State
+          ↓
+    Decision Logic
+          ↓
+      Valid Action
+          ↓
+       Feedback
+          ↓
+      Adaptation
 
-## Project Status
+---
 
-**Status:** Active development / portfolio project
+# 📌 Project Status
 
-The repository contains the finalized project structure and the intelligence hardening work completed for the current development baseline.
+**Active Development / Portfolio Project**
 
-The project is intended to demonstrate practical work across AI/ML, full-stack development, intelligent recommendation systems, API design, database integration, security, and software testing.
+FitZone AI is being developed as a serious AI/ML and full-stack portfolio project.
 
-## Author
+The project demonstrates practical work across:
 
-### Nitish Y Pujar
+- 🤖 Artificial Intelligence
+- 🧠 Machine Learning
+- 💻 Full-Stack Development
+- 🎯 Intelligent Recommendation Systems
+- 🔌 REST API Design
+- 🗄️ Database Integration
+- 🔐 Authentication & Security
+- 🔄 State Management
+- 🧪 Automated Testing
+- ✨ AI-Assisted Application Design
 
-BTech AI/ML Student
+---
 
-Interested in:
+# 👨‍💻 About Me
+
+## Nitish Y Pujar
+
+**BTech AI/ML Student**
+
+I enjoy building practical systems where AI and software engineering actually work together instead of existing as separate features.
+
+My current interests include:
 
 - Artificial Intelligence
 - Machine Learning
@@ -861,12 +954,26 @@ Interested in:
 - Intelligent Systems
 - Applied AI Engineering
 
-GitHub:
+### GitHub
 
 https://github.com/Nitishypujar
 
-## License
+---
 
-This project is maintained primarily as a personal academic, learning, and portfolio project.
+# ⭐ Final Note
 
-Refer to the repository for the applicable license and usage terms.
+FitZone AI started as a fitness application.
+
+It gradually became a much more interesting engineering problem:
+
+> **How do you build a system that can observe what is happening, understand the current state, make a reasonable decision, explain that decision, and learn from what the user actually did?**
+
+That question is what drives the project.
+
+## Observe. Understand. Recommend. Act. Learn. Adapt.
+
+---
+
+### Built with ❤️, curiosity, and a lot of debugging.
+
+**FitZone AI — turning fitness data into an adaptive experience.**
