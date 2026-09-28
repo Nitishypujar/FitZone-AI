@@ -1,4 +1,4 @@
-# 🏋️ FitZone AI
+# :muscle: FitZone AI
 
 > An AI-powered fitness platform that combines workout tracking, nutrition planning, progress analysis, and adaptive recommendations into one intelligent fitness experience.
 
@@ -8,20 +8,20 @@ FitZone AI is built around the idea that fitness recommendations should evolve f
 
 ---
 
-## ✨ Key Features
+## :sparkles: Key Features
 
-- 🧠 **Adaptive Fitness Intelligence** — analyzes the user's current fitness state and determines the next best action.
-- 🏋️ **Workout Management** — workout planning, exercise tracking, and completion tracking.
-- 📊 **Progress Intelligence** — weekly activity, active minutes, workout history, streaks, and goal progress.
-- 🥗 **Nutrition Planning** — calorie and protein targets based on the user's active fitness goal.
-- 🤖 **AI Assistant** — uses Gemini to explain fitness decisions and answer user questions.
-- 🎯 **Goal Management** — tracks workout frequency, activity targets, and fitness goals.
-- 🔐 **Security & User Isolation** — authentication, validation, protected routes, CORS, and security middleware.
-- 🔄 **Adaptive Recommendations** — recommendations respond to the user's current state and activity.
+- :brain: **Adaptive Fitness Intelligence** — analyzes the user's current fitness state and determines the next best action.
+- :muscle: **Workout Management** — workout planning, exercise tracking, and completion tracking.
+- :bar_chart: **Progress Intelligence** — weekly activity, active minutes, workout history, streaks, and goal progress.
+- :apple: **Nutrition Planning** — calorie and protein targets based on the user's active fitness goal.
+- :robot: **AI Assistant** — uses Gemini to explain fitness decisions and answer user questions.
+- :dart: **Goal Management** — tracks workout frequency, activity targets, and fitness goals.
+- :lock: **Security & User Isolation** — authentication, validation, protected routes, CORS, and security middleware.
+- :arrows_counterclockwise: **Adaptive Recommendations** — recommendations respond to the user's current state and activity.
 
 ---
 
-## 🧠 Fitness Intelligence
+## :brain: Fitness Intelligence
 
 The core of FitZone AI is the **Fitness Brain**.
 
@@ -47,7 +47,7 @@ This keeps **recommendation data** and **real activity data** separate.
 
 ---
 
-## 🏗️ Architecture
+## :building_construction: Architecture
 
 **React + Vite**  
 ↓  
@@ -69,7 +69,7 @@ Gemini acts as an **explanation and interaction layer**. The application's fitne
 
 ---
 
-## 🛠️ Tech Stack
+## :hammer_and_wrench: Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -85,7 +85,7 @@ Gemini acts as an **explanation and interaction layer**. The application's fitne
 
 ---
 
-## 📱 Main Application Areas
+## :iphone: Main Application Areas
 
 | Area | Purpose |
 |---|---|
@@ -100,7 +100,7 @@ Gemini acts as an **explanation and interaction layer**. The application's fitne
 
 ---
 
-## 🔐 Engineering Principles
+## :lock: Engineering Principles
 
 FitZone AI focuses on correctness and data integrity rather than simply adding AI features.
 
@@ -119,7 +119,7 @@ Key decisions include:
 
 ---
 
-## 🧪 Testing
+## :test_tube: Testing
 
 The project includes automated checks covering:
 
@@ -140,7 +140,7 @@ The project is tested locally before major changes are finalized.
 
 ---
 
-## 🚀 Running Locally
+## :rocket: Running Locally
 
 ### Clone the repository
 
@@ -174,7 +174,7 @@ Run the frontend, backend, and ML service according to the project's local devel
 
 ---
 
-## 📂 Project Structure
+## :file_folder: Project Structure
 
     FitZone-AI/
     ├── frontend/       # React + Vite application
@@ -187,7 +187,7 @@ Run the frontend, backend, and ML service according to the project's local devel
 
 ---
 
-## 🔮 Future Direction
+## :crystal_ball: Future Direction
 
 - More personalized ML models as meaningful user data grows
 - Stronger behavioral and adherence modeling
@@ -201,7 +201,7 @@ The current system uses a **cold-start approach** rather than pretending that a 
 
 ---
 
-## 💡 Project Focus
+## :bulb: Project Focus
 
 FitZone AI is more than a fitness website with an AI chatbot.
 
@@ -213,18 +213,25 @@ The goal is to build a system where recommendations can become increasingly pers
 
 ---
 
-## 👨‍💻 Author
+## :technologist: Author
 
 **Nitish Y Pujar**
 
 BTech AI/ML Student | Full-Stack & AI/ML Developer
 
-GitHub: https://github.com/Nitishypujar
+GitHub: **@Nitishypujar**
 
 ---
 
-## 📌 Project Status
+## :pushpin: Project Status
 
-FitZone AI is an actively developed AI/full-stack project focused on adaptive fitness intelligence, recommendation systems, workout tracking, nutrition planning, progress analysis, and explainable AI-assisted interaction.
+FitZone AI is an actively developed AI/full-stack project focused on:
+
+- Adaptive fitness intelligence
+- Recommendation systems
+- Workout tracking
+- Nutrition planning
+- Progress analysis
+- Explainable AI-assisted interaction
 
 **Built with a focus on correctness, explainability, and practical engineering.**
