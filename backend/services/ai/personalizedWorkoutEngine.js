@@ -31,10 +31,11 @@ function normalizeGoal(goal = '') {
       return 'strength'
     }
   
-    if (
-      value.includes('endurance') ||
-      value.includes('stamina')
-    ) {
+    if (value.includes('stamina')) {
+      return 'stamina'
+    }
+
+    if (value.includes('endurance')) {
       return 'endurance'
     }
   
@@ -91,6 +92,7 @@ function normalizeGoal(goal = '') {
       'muscle-growth': 'Hypertrophy',
       strength: 'Strength',
       endurance: 'Endurance',
+      stamina: 'Stamina',
       flexibility: 'Mobility',
       'maintain-fitness': 'Mixed Fitness',
       'general-fitness': 'Full Body',
@@ -220,6 +222,14 @@ function normalizeGoal(goal = '') {
       },
     ],
   
+    stamina: [
+      { name: 'Brisk March', type: 'cardio', defaultDuration: 8 },
+      { name: 'Step-Ups', type: 'cardio', defaultDuration: 7 },
+      { name: 'High Knees', type: 'cardio', defaultDuration: 6 },
+      { name: 'Jumping Jacks', type: 'cardio', defaultDuration: 6 },
+      { name: 'Mountain Climbers', type: 'cardio', defaultDuration: 5 },
+    ],
+
     flexibility: [
       {
         name: 'Neck Mobility',
@@ -342,7 +352,11 @@ function normalizeGoal(goal = '') {
       result.repetitions = Math.max(5, result.repetitions - 2)
     }
 
-    if (goal === 'endurance' && exercise.type === 'cardio') {
+    if ((goal === 'endurance' || goal === 'stamina') && exercise.type === 'cardio') {
+      result.duration_seconds += goal === 'stamina' ? 10 : 15
+    }
+
+    if (goal === 'flexibility' && exercise.type === 'mobility') {
       result.duration_seconds += 15
     }
 

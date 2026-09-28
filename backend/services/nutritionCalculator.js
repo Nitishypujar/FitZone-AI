@@ -31,14 +31,26 @@ function calculateNutritionTargets(profile = {}) {
   else if (workoutDays >= 2) activityMultiplier = 1.375
 
   let calories = bmr * activityMultiplier
-  if (goal.includes('lose') || goal.includes('fat')) calories *= 0.85
-  else if (goal.includes('gain') || goal.includes('muscle') || goal.includes('strength')) calories *= 1.1
+  const normalizedGoal = goal.replace(/[_-]/g, ' ').trim()
+
+  if (normalizedGoal.includes('fat') || normalizedGoal.includes('lose')) {
+    calories *= 0.85
+  } else if (normalizedGoal.includes('weight gain') || normalizedGoal.includes('muscle') || normalizedGoal.includes('strength')) {
+    calories *= 1.10
+  } else if (normalizedGoal.includes('endurance') || normalizedGoal.includes('stamina')) {
+    calories *= 1.05
+  }
 
   calories = Math.max(1200, Math.round(calories))
 
   let proteinMultiplier = 1.4
-  if (goal.includes('muscle') || goal.includes('strength') || goal.includes('gain')) proteinMultiplier = 1.6
-  else if (goal.includes('fat') || goal.includes('lose')) proteinMultiplier = 1.6
+  if (normalizedGoal.includes('muscle') || normalizedGoal.includes('strength') || normalizedGoal.includes('weight gain')) {
+    proteinMultiplier = 1.6
+  } else if (normalizedGoal.includes('fat') || normalizedGoal.includes('lose')) {
+    proteinMultiplier = 1.6
+  } else if (normalizedGoal.includes('endurance') || normalizedGoal.includes('stamina')) {
+    proteinMultiplier = 1.5
+  }
 
   const protein = Math.round(weight * proteinMultiplier)
   const fats = Math.max(35, Math.round(weight * 0.8))

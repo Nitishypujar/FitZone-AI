@@ -29,7 +29,7 @@ async function buildIntelligenceFromContext(supabase, userId, context) {
   const userState = buildUserState({
     profile: context.profile,
     goals: context.goals,
-    workouts: context.recent_workouts,
+    workouts: context.workouts || context.recent_workouts,
     workoutLogs: context.recent_workout_logs,
     nutritionToday: context.nutrition_today,
     nutritionTargets,

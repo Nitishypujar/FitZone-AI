@@ -57,7 +57,7 @@ function Nutrition() {
 
   const intelligence = query.data?.intelligence || {}
   const brain = query.data?.brain || null
-  const meals = query.data?.meals || []
+  const meals = useMemo(() => query.data?.meals || [], [query.data?.meals])
   const today = intelligence.today || { totals: {}, targets: {}, percentages: {}, meals_logged: 0 }
   const targets = intelligence.targets || brain?.intelligence?.nutrition_targets || { available: false }
   const history = intelligence.history || []

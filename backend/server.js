@@ -774,9 +774,11 @@ app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
       if (existingResult.error) throw new Error(existingResult.error.message)
 
       if (existingResult.data && !existingResult.data.completed) {
-        const snapshot = pendingEvent.context_snapshot || {}
-        const recommendation = snapshot.recommendation_intelligence || null
-        return res.status(200).json({
+        const todayForPending = getLocalDateKey(new Date(), timeZone)
+        if (existingResult.data.scheduled_date === todayForPending) {
+          const snapshot = pendingEvent.context_snapshot || {}
+          const recommendation = snapshot.recommendation_intelligence || null
+          return res.status(200).json({
           status: 'success',
           message: 'Using your current personalized workout.',
           workout: existingResult.data,
@@ -796,6 +798,15 @@ app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
             ml_source: recommendation?.ml_source || 'stored_recommendation',
           },
         })
+        }
+
+        // Do not let an old unfinished recommendation hijack today's workout.
+        // Mark it as explicitly not accepted so a fresh recommendation can be generated.
+        await supabase
+          .from('recommendation_events')
+          .update({ accepted: false, outcome_recorded_at: new Date().toISOString() })
+          .eq('id', pendingEvent.id)
+          .eq('user_id', user.id)
       }
     }
 
@@ -868,6 +879,7 @@ app.post('/api/workouts/generate', generationLimiter, async (req, res) => {
       recommendation_action: recommendation?.action || 'follow-planned-workout',
       recommendation: recommendation?.reason || 'Follow your personalized FitZone plan.',
       reason: recommendation?.reason || null,
+      workout_id: workout.id,
       context_snapshot: {
         ...userState,
         recommended_workout_id: workout.id,
@@ -962,35 +974,37 @@ app.get('/api/workouts/current', async (req, res) => {
   if (!user) return
 
   try {
-    const { data: event, error: eventError } = await supabase
+    const timeZone = getRequestTimeZone(req)
+    const today = getLocalDateKey(new Date(), timeZone)
+    const { data: events, error: eventError } = await supabase
       .from('recommendation_events')
       .select('*')
       .eq('user_id', user.id)
       .is('completed', null)
       .not('workout_id', 'is', null)
       .order('generated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(20)
 
-    if (eventError) {
-      console.error('Current workout recommendation lookup error:', eventError)
-    }
+    if (eventError) throw new Error(eventError.message)
 
+    let event = null
     let workout = null
-
-    if (event?.workout_id !== null && event?.workout_id !== undefined) {
+    for (const candidate of events || []) {
       const result = await supabase
         .from('workouts')
         .select('*')
-        .eq('id', event.workout_id)
+        .eq('id', candidate.workout_id)
         .eq('user_id', user.id)
         .maybeSingle()
       if (result.error) throw new Error(result.error.message)
-      workout = result.data || null
+      if (result.data && !result.data.completed && result.data.scheduled_date === today) {
+        event = candidate
+        workout = result.data
+        break
+      }
     }
 
     if (!workout) {
-      const today = getLocalDateKey(new Date(), getRequestTimeZone(req))
       const fallback = await supabase
         .from('workouts')
         .select('*')
@@ -1008,7 +1022,7 @@ app.get('/api/workouts/current', async (req, res) => {
       status: 'success',
       workout,
       recommendation_event: event || null,
-      source: event?.workout_id ? 'recommendation-event' : 'today-fallback',
+      source: event?.workout_id ? 'recommendation-event' : (workout ? 'today-fallback' : 'none'),
     })
   } catch (error) {
     console.error('Current workout fetch error:', error)
@@ -1350,15 +1364,6 @@ app.put('/api/workouts/:id', async (req, res) => {
             recommendationError
           )
         } else {
-          if (!matchingEvent) {
-            matchingEvent = (pendingEvents || []).find((event) => {
-              const snapshot = event?.context_snapshot || {}
-              const directId = snapshot.recommended_workout_id ?? snapshot.recommendation_workout_id
-              const nestedId = snapshot.workout_state?.current_workout?.id
-              return String(directId ?? nestedId ?? '') === String(workoutId)
-            }) || null
-          }
-
           if (matchingEvent) {
             const { data: updatedEvent, error: updateEventError } =
               await supabase
@@ -2508,7 +2513,7 @@ app.get('/api/user-state', async (req, res) => {
     const state = buildUserState({
       profile: context.profile,
       goals: context.goals,
-      workouts: context.recent_workouts,
+      workouts: context.workouts || context.recent_workouts,
       workoutLogs: context.recent_workout_logs,
       nutritionToday: context.nutrition_today,
       nutritionTargets,
@@ -2539,24 +2544,51 @@ app.get('/api/fitness/state', async (req, res) => {
   if (!user) return
 
   try {
-    const context = await buildFitnessContext(
-      supabase,
-      user.id,
-      getRequestTimeZone(req)
-    )
+    const timeZone = getRequestTimeZone(req)
+    const context = await buildFitnessContext(supabase, user.id, timeZone)
     const nutritionTargets = calculateNutritionTargets(context.profile)
     const state = buildUserState({
       profile: context.profile,
       goals: context.goals,
-      workouts: context.recent_workouts,
+      workouts: context.workouts || context.recent_workouts,
       workoutLogs: context.recent_workout_logs,
       nutritionToday: context.nutrition_today,
       nutritionTargets,
       progress: context.recent_progress,
       weeklyWorkoutProgress: context.weekly_workout_progress,
-      timeZone: context.time_zone || getRequestTimeZone(req),
+      timeZone: context.time_zone || timeZone,
     })
-    res.json({ status: 'success', state })
+
+    // Backward-compatible response: keep `state` while also exposing the
+    // canonical intelligence-shaped fields consumed by the current pages.
+    // This prevents older clients and the hardened UI from reading different
+    // weekly/goal state from the same endpoint.
+    const { buildIntelligenceFromContext } = require('./services/intelligence/intelligenceService')
+    const intelligence = await buildIntelligenceFromContext(supabase, user.id, context)
+    const today = dayKeyFromDate(new Date(), timeZone)
+    const { data: todayWorkouts, error: todayWorkoutError } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('scheduled_date', today)
+      .order('created_at', { ascending: false })
+    if (todayWorkoutError) throw new Error(todayWorkoutError.message)
+
+    const todayWorkout = (todayWorkouts || []).find((workout) => Array.isArray(workout.exercises) && workout.exercises.length > 0) || (todayWorkouts || [])[0] || null
+    const nextOpenWorkout = (todayWorkouts || []).find((workout) => !workout.completed && Array.isArray(workout.exercises) && workout.exercises.length > 0) || (todayWorkouts || []).find((workout) => !workout.completed) || null
+
+    res.json({
+      status: 'success',
+      state,
+      profile: context.profile,
+      goals: context.goals,
+      user_state: intelligence.user_state,
+      intelligence,
+      today_workout: todayWorkout,
+      next_open_workout: nextOpenWorkout,
+      nutrition_today: context.nutrition_today,
+      weekly_workout_progress: context.weekly_workout_progress,
+    })
   } catch (error) {
     console.error('Fitness state compatibility error:', error)
     res.status(500).json({ status: 'error', message: 'Unable to build fitness state' })
@@ -3801,13 +3833,21 @@ app.get('/api/foods/search', async (req, res) => {
 })
 
 async function getNutritionInputs(userId) {
-  const [profileResult, nutritionResult] = await Promise.all([
+  const [profileResult, goalsResult, nutritionResult] = await Promise.all([
     supabase.from('profiles').select('age,height_cm,weight_kg,fitness_level,primary_goal,workout_days_per_week,preferred_workout_duration').eq('id', userId).maybeSingle(),
+    supabase.from('goals').select('goal_type,completed,created_at,weekly_workout_target,weekly_active_minute_target').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('nutrition_logs').select('*').eq('user_id', userId).order('logged_at', { ascending: false }),
   ])
   if (profileResult.error) throw new Error('Unable to fetch nutrition profile')
+  if (goalsResult.error) throw new Error('Unable to fetch nutrition goals')
   if (nutritionResult.error) throw new Error('Unable to fetch nutrition logs')
-  return { profile: profileResult.data || {}, nutritionLogs: nutritionResult.data || [] }
+
+  const profile = { ...(profileResult.data || {}) }
+  const activeGoal = (goalsResult.data || []).find((goal) => !goal.completed) || (goalsResult.data || [])[0] || null
+  const canonicalGoal = goalTypeToProfileGoal(activeGoal?.goal_type)
+  if (canonicalGoal) profile.primary_goal = canonicalGoal
+
+  return { profile, nutritionLogs: nutritionResult.data || [] }
 }
 
 app.get('/api/nutrition/intelligence', async (req, res) => {

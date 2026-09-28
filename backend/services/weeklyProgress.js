@@ -69,8 +69,14 @@ function getCurrentWeekRange(referenceDate = new Date(), timeZone = 'UTC') {
 }
 
 function getWorkoutCompletionDate(workout) {
-  if (!workout?.completed_at) return null
-  const date = new Date(workout.completed_at)
+  if (!workout?.completed) return null
+
+  // New completions use completed_at. Older valid completed rows may predate
+  // that field being populated, so preserve their history using the best
+  // recorded date available instead of silently dropping them from weekly state.
+  const candidate = workout.completed_at || workout.scheduled_date || workout.created_at
+  if (!candidate) return null
+  const date = new Date(candidate)
   return Number.isNaN(date.getTime()) ? null : date
 }
 

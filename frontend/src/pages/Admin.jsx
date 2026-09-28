@@ -38,7 +38,7 @@ function Admin() {
     refetchInterval: 60_000,
   })
 
-  const members = overviewQuery.data?.members || []
+  const members = useMemo(() => overviewQuery.data?.members || [], [overviewQuery.data?.members])
   const stats = overviewQuery.data?.stats || {}
   const selectedMember = selectedMemberQuery.data || null
   const audit = auditQuery.data?.audit || []

@@ -16,7 +16,8 @@ async function createRecommendationEvent(
     recommendation_action,
     recommendation,
     reason,
-    context_snapshot
+    context_snapshot,
+    workout_id
   } = recommendationData;
 
   if (!recommendation_type || !recommendation) {
@@ -34,7 +35,8 @@ async function createRecommendationEvent(
         recommendation_action || recommendation_type,
       recommendation,
       reason: reason || null,
-      context_snapshot: context_snapshot || null
+      context_snapshot: context_snapshot || null,
+      workout_id: workout_id ?? null
     })
     .select()
     .single();

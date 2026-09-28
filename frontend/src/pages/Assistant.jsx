@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useFitnessBrain } from '../hooks/useFitnessBrain'
 
@@ -27,7 +27,7 @@ function getCurrentUserKey() {
 }
 
 function getAssistantStorageKey() {
-  return `fitzone_assistant_v3_${getCurrentUserKey()}`
+  return `fitzone_assistant_v4_${getCurrentUserKey()}`
 }
 
 function welcomeMessage() {
@@ -42,7 +42,17 @@ function welcomeMessage() {
 function readSavedMessages() {
   try {
     const saved = JSON.parse(localStorage.getItem(getAssistantStorageKey()) || 'null')
-    if (Array.isArray(saved) && saved.length > 0) return saved.slice(-40)
+    if (Array.isArray(saved) && saved.length > 0) {
+      return [
+        ...saved.slice(-40),
+        {
+          id: 'state-refresh-v4',
+          sender: 'ai',
+          text: 'Live fitness state has been refreshed. New answers use your current workouts, goals, progress and nutrition data; earlier messages remain as conversation history.',
+          source: 'system',
+        },
+      ]
+    }
   } catch {
     // Ignore corrupted local conversation state.
   }

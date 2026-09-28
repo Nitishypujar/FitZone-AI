@@ -24,6 +24,7 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import DashboardLayout from './components/DashboardLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import ScrollToTop from './components/ScrollToTop'
 
 function AppShell() {
   const location = useLocation()
@@ -31,6 +32,7 @@ function AppShell() {
 
   return (
     <div className="app">
+      <ScrollToTop />
       {!isAppRoute && <Navbar />}
 
       <Routes>

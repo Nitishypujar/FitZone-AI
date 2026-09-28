@@ -41,14 +41,6 @@ function addDays(dateKey, amount) {
   return date.toISOString().slice(0, 10)
 }
 
-function getCurrentWeekKeys(todayKey) {
-  if (!todayKey) return []
-  const date = parseDateKey(todayKey)
-  const day = date.getUTCDay()
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  return Array.from({ length: 7 }, (_, index) => addDays(todayKey, mondayOffset + index))
-}
-
 function getIsoWeekStart(dateKey) {
   const date = parseDateKey(dateKey)
   const day = date.getUTCDay()
@@ -114,6 +106,8 @@ function Progress() {
         if (mounted) setLoading(false)
       })
     return () => { mounted = false }
+    // The initial load intentionally runs once; range changes call loadActivity directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function changeRange(nextRange) {
@@ -128,14 +122,6 @@ function Progress() {
   const today = activity?.today
   const selected = activity?.days?.find((day) => day.date === selectedDate) || today
   const summary = activity?.summary || {}
-
-  const weeklyDays = useMemo(() => {
-    const days = activity?.days || []
-    const todayKey = today?.date || activity?.end_date
-    if (!todayKey) return []
-    const weekKeys = new Set(getCurrentWeekKeys(todayKey))
-    return days.filter((day) => weekKeys.has(day.date))
-  }, [activity, today?.date])
 
   const trendDays = useMemo(() => {
     const days = activity?.days || []
@@ -173,9 +159,10 @@ function Progress() {
   }, [activity, range])
 
   const maxTrendMinutes = Math.max(1, ...trendDays.map((day) => Number(day.active_minutes || 0)))
-  const weeklyWorkoutTotal = weeklyDays.reduce((sum, day) => sum + Number(day.workouts_completed || 0), 0)
+  const canonicalWeeklyState = brain?.user_state?.goal_state || {}
+  const weeklyWorkoutTotal = Number(canonicalWeeklyState.current_weekly_workouts || 0)
   const weeklyWorkoutPercent = workoutTarget ? Math.min(100, Math.round((weeklyWorkoutTotal / Number(workoutTarget)) * 100)) : null
-  const weeklyMinuteTotal = weeklyDays.reduce((sum, day) => sum + Number(day.active_minutes || 0), 0)
+  const weeklyMinuteTotal = Number(canonicalWeeklyState.current_weekly_active_minutes || 0)
   const weeklyMinutePercent = minuteTarget ? Math.min(100, Math.round((weeklyMinuteTotal / Number(minuteTarget)) * 100)) : null
   const trendGranularity = range === '1y' ? 'Monthly' : range === '3m' ? 'Weekly' : 'Daily'
   const goalTitle = goalLabels[String(latestGoal?.goal_type || '').toLowerCase()] || (latestGoal ? 'Your current goal' : 'No goal set')
@@ -185,7 +172,7 @@ function Progress() {
   }
 
   if (error && !activity) {
-    return <main className="progress-page"><section className="progress-error"><p className="eyebrow">PROGRESS INTELLIGENCE</p><h1>We couldn't load your <span>activity.</span></h1><p>{error}</p><button className="primary-button" type="button" onClick={() => { setError(''); loadActivity(range) }}>Try again</button></section></main>
+    return <main className="progress-page"><section className="progress-error"><p className="eyebrow">PROGRESS INTELLIGENCE</p><h1>We couldn&apos;t load your <span>activity.</span></h1><p>{error}</p><button className="primary-button" type="button" onClick={() => { setError(''); loadActivity(range) }}>Try again</button></section></main>
   }
 
   return (
@@ -193,7 +180,7 @@ function Progress() {
       <section className="progress-hero-new">
         <div>
           <p className="eyebrow">PROGRESS INTELLIGENCE</p>
-          <h1>{getTodayGreeting()},<br /><span>here's your story.</span></h1>
+          <h1>{getTodayGreeting()},<br /><span>here&apos;s your story.</span></h1>
           <p className="progress-date-line">{formatDate(today?.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
           <p className="progress-hero-copy">Your activity history stays with you. FitZone reads completed workouts, real active minutes, exercise logs and nutrition activity instead of resetting the story every week.</p>
         </div>

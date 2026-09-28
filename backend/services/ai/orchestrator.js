@@ -80,7 +80,7 @@ const {
     if (intent === 'nutrition') {
       toolPromise = getTodayNutrition(supabase, userId, timeZone)
     } else if (intent === 'workout') {
-      toolPromise = getWorkoutData(supabase, userId)
+      toolPromise = getWorkoutData(supabase, userId, timeZone)
     } else if (intent === 'progress') {
       toolPromise = getProgressData(supabase, userId)
     } else if (intent === 'goals') {

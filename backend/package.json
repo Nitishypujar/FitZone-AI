@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/adaptive-smoke.js && node tests/completion-regression.test.js && node tests/security-validation.js && node tests/auth-route-contract.js && node tests/assistant-quality.test.js && node tests/product-integration-contract.js && node tests/nutrition-platform.test.js",
+    "test": "node tests/adaptive-smoke.js && node tests/completion-regression.test.js && node tests/security-validation.js && node tests/auth-route-contract.js && node tests/assistant-quality.test.js && node tests/product-integration-contract.js && node tests/nutrition-platform.test.js && node tests/fitness-brain-hardening.test.js && node tests/user-isolation-contract.test.js",
     "verify": "node ../tools/verify-project.js",
     "security": "node ../tools/security-check.js"
   },

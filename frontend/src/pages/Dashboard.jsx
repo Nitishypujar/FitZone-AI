@@ -76,7 +76,7 @@ function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(null)
   const token = localStorage.getItem('fitzone_access_token')
   const timeZone = getTimeZone()
-  const now = new Date()
+  const now = useMemo(() => new Date(), [])
   let storedUser = null
   try {
     storedUser = JSON.parse(localStorage.getItem('fitzone_user') || 'null')
@@ -114,21 +114,24 @@ function Dashboard() {
   const data = dashboardQuery.data
   const error = dashboardQuery.error?.message || ''
   const activity = data?.activity || {}
-  const entries = activity.entries || []
+  const entries = useMemo(() => activity.entries || [], [activity.entries])
   const activitySummary = activity.summary || {}
   const intelligence = data?.brain?.intelligence || data?.intelligence || {}
   const goalState = intelligence?.user_state?.goal_state || {}
   const recommendation = data?.recommendation || null
   const nextAction = intelligence?.next_best_action || recommendation?.next_action || null
-  const currentWorkout = data?.brain?.today_workout || data?.brain?.next_open_workout || data?.currentWorkout || null
+  const currentWorkoutCandidate = data?.brain?.next_open_workout || data?.brain?.today_workout || data?.currentWorkout || null
+  const currentWorkout = currentWorkoutCandidate && !currentWorkoutCandidate.completed ? currentWorkoutCandidate : null
   const nutrition = data?.nutrition || {}
   const nutritionToday = nutrition.today || {}
   const nutritionTargets = nutrition.targets || {}
 
   const currentWeekKeys = useMemo(() => new Set(getCurrentWeekKeys(localDateKey(now, timeZone))), [now, timeZone])
   const weeklyEntries = useMemo(() => entries.filter((entry) => currentWeekKeys.has(entry.date)), [entries, currentWeekKeys])
-  const weeklyWorkouts = weeklyEntries.reduce((sum, entry) => sum + Number(entry.completed_workouts || 0), 0)
-  const weeklyMinutes = weeklyEntries.reduce((sum, entry) => sum + Number(entry.workout_minutes || 0), 0)
+  // Workout count/minutes come from the canonical Fitness Brain. The activity
+  // timeline is only used for day-level presentation metrics.
+  const weeklyWorkouts = Number(goalState.current_weekly_workouts || 0)
+  const weeklyMinutes = Number(goalState.current_weekly_active_minutes || 0)
   const weeklyNutritionDays = weeklyEntries.filter((entry) => Number(entry.meals_logged || 0) > 0).length
   const weeklyActiveDays = weeklyEntries.filter((entry) => entry.active).length
   const weeklyWorkoutTarget = Number(goalState.weekly_workout_target) > 0 ? Number(goalState.weekly_workout_target) : null

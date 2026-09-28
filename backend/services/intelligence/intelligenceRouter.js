@@ -69,10 +69,12 @@ router.get(
       if (!user) {
         return
       }
+      const timeZone = String(req.query?.timezone || 'UTC').trim() || 'UTC'
       const snapshot =
         await buildIntelligenceSnapshot(
           req.app.locals.supabase,
-          user.id
+          user.id,
+          timeZone
         )
       return res.json({
         status: "success",

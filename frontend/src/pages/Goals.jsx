@@ -276,7 +276,7 @@ function Goals() {
                   </h3>
                 </div>
 
-                <strong>WEEK</strong>
+                <strong>PER WEEK</strong>
               </div>
 
               <input
@@ -293,8 +293,8 @@ function Goals() {
               />
 
               <div className="range-labels">
-                <span>2</span>
-                <span>7</span>
+                <span>Min 2</span>
+                <span>Max 7</span>
               </div>
 
               <p>
@@ -314,7 +314,7 @@ function Goals() {
                   </h3>
                 </div>
 
-                <strong>WEEK</strong>
+                <strong>PER WEEK</strong>
               </div>
 
               <input
@@ -332,8 +332,8 @@ function Goals() {
               />
 
               <div className="range-labels">
-                <span>60</span>
-                <span>500</span>
+                <span>Min 60</span>
+                <span>Max 500</span>
               </div>
 
               <p>

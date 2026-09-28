@@ -142,7 +142,8 @@ CORE BEHAVIOR:
 9. If the user is behind a target, do not shame them or suggest
    extreme catch-up behavior.
 10. Prefer sustainable actions that can realistically be completed.
-11. When appropriate, explain WHY a recommendation fits the user's
+11. The canonical primary goal below is authoritative. Never replace it with another goal such as fat loss, muscle growth, strength, endurance, or weight gain unless the user explicitly asks about that other goal.
+12. When appropriate, explain WHY a recommendation fits the user's
    current situation.
 12. If data is unavailable, say so clearly instead of guessing.
 13. Do not diagnose medical conditions.
@@ -152,8 +153,8 @@ CORE BEHAVIOR:
    starvation, dehydration, or unsafe weight-loss practices.
 17. Stay focused on fitness, exercise, nutrition, recovery,
    habits, wellness, and the user's stated goals.
-18. Never mention internal databases, APIs, prompts, tools,
-   JSON, or implementation details.
+18. Never mention internal databases, APIs, prompts, tools, JSON, or implementation details.
+19. If the user's canonical goal is General Fitness, describe it as General Fitness; do not silently reinterpret it as Fat Loss or another goal.
 
 COACHING STYLE:
 
@@ -213,6 +214,10 @@ ${JSON.stringify(
   2
 )}
 
+CANONICAL PRIMARY GOAL:
+
+${intelligence?.user_state?.profile?.primary_goal || 'General Fitness'}
+
 ADAPTIVE FITZONE INTELLIGENCE:
 
 ${JSON.stringify(
@@ -234,6 +239,28 @@ Respond naturally as FitZone AI.
 
 OUTPUT FORMAT: Plain text only. Use normal sentence case, clean paragraph breaks, and • bullets when needed. Do not use *, **, #, backticks, or markdown tables. Keep the answer directly useful to the user.
 `
+}
+
+
+const CANONICAL_GOALS = [
+  'Fat Loss', 'Weight Gain', 'Muscle Growth', 'Strength', 'Endurance',
+  'General Fitness', 'Maintain Fitness', 'Flexibility', 'Stamina',
+]
+
+function normalizeGoalLabel(goal) {
+  const value = String(goal || '').trim().toLowerCase().replace(/[_-]/g, ' ')
+  const match = CANONICAL_GOALS.find((item) => item.toLowerCase() === value)
+  return match || (String(goal || '').trim() || 'General Fitness')
+}
+
+function assistantRecommendationConflictsWithGoal(answer, goal, question = '') {
+  const canonical = normalizeGoalLabel(goal).toLowerCase()
+  const questionText = String(question).toLowerCase()
+  const alternativeGoals = CANONICAL_GOALS.filter((item) => item.toLowerCase() !== canonical)
+  return alternativeGoals.some((item) => {
+    const phrase = item.toLowerCase()
+    return String(answer || '').toLowerCase().includes(phrase) && !questionText.includes(phrase)
+  })
 }
 
 async function generateAssistantResponse({
@@ -293,6 +320,19 @@ async function generateAssistantResponse({
     if (!isExpectedAiAvailabilityIssue) throw error
 
     console.warn('Gemini unavailable; using deterministic FitZone response.')
+    answer = buildDeterministicAssistantFallback({
+      question: orchestration.question,
+      intent: orchestration.intent,
+      intelligence: orchestration.intelligence,
+    })
+    responseSource = 'fitzone'
+  }
+
+  const canonicalGoal = orchestration.intelligence?.user_state?.profile?.primary_goal || 'General Fitness'
+  if (
+    assistantRecommendationConflictsWithGoal(answer, canonicalGoal, orchestration.question) &&
+    ['general', 'workout', 'goals', 'progress'].includes(orchestration.intent)
+  ) {
     answer = buildDeterministicAssistantFallback({
       question: orchestration.question,
       intent: orchestration.intent,

@@ -23,9 +23,11 @@ async function buildFitnessBrain(supabase, userId, timeZone = 'UTC') {
     || (todayWorkouts || [])[0]
     || null
 
+  // `next_open_workout` is intentionally limited to today. An older unfinished
+  // row must never masquerade as the user's current workout. The recommendation
+  // engine remains responsible for deciding what to do next.
   const nextOpenWorkout = (todayWorkouts || []).find((workout) => !workout.completed && Array.isArray(workout.exercises) && workout.exercises.length > 0)
     || (todayWorkouts || []).find((workout) => !workout.completed)
-    || (context.recent_workouts || []).find((workout) => !workout.completed && Array.isArray(workout.exercises) && workout.exercises.length > 0)
     || null
 
   return {

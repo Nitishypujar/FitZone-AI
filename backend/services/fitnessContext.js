@@ -1,4 +1,4 @@
-﻿const {
+const {
   calculateWeeklyWorkoutProgress,
 } = require('./weeklyProgress')
 const { dayKeyFromDate } = require('./nutrition/nutritionIntelligence')
@@ -185,8 +185,11 @@ async function buildFitnessContext(supabase, userId, timeZone = 'UTC') {
       weekly_workout_progress:
         weeklyWorkoutProgress,
 
+      // Full user-scoped workout set is the source for adherence and weekly calculations.
+      // UI/assistant selectors still trim it when they only need recent history.
+      workouts,
       recent_workouts:
-        workouts.slice(0, 10),
+        workouts.slice(0, 50),
 
       recent_workout_logs:
         workoutLogs.slice(0, 20),

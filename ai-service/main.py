@@ -47,7 +47,8 @@ from pydantic import BaseModel, Field
 
 
 APP_NAME = "FitZone AI ML Service"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
+MIN_TRAINING_SAMPLES = 5
 
 HOST = os.getenv("ML_HOST", "127.0.0.1")
 PORT = int(os.getenv("ML_PORT", "8000"))
@@ -923,8 +924,8 @@ def predict_nutrition_adherence(features: NutritionAdherenceFeatures):
 
 @app.post("/train/nutrition-adherence")
 def train_nutrition_adherence(request: NutritionTrainingRequest):
-    if not request.examples:
-        raise HTTPException(status_code=400, detail="Nutrition training examples are required.")
+    if len(request.examples) < MIN_TRAINING_SAMPLES:
+        raise HTTPException(status_code=400, detail=f"At least {MIN_TRAINING_SAMPLES} nutrition outcome examples are required before training.")
     X = [normalize_nutrition_vector(example.features) for example in request.examples]
     y = [1 if example.adherent else 0 for example in request.examples]
     try:
@@ -961,12 +962,10 @@ def train_model(
     request: TrainingRequest,
 ):
 
-    if not request.examples:
+    if len(request.examples) < MIN_TRAINING_SAMPLES:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Training examples are required."
-            ),
+            detail=f"At least {MIN_TRAINING_SAMPLES} real outcome examples are required before training.",
         )
 
     X = []

@@ -52,35 +52,39 @@ function calculateWorkoutTrend(recentWorkouts) {
   return 'low'
 }
 
-function calculateRecentTrainingLoad(
-  recentWorkouts
-) {
+function calculateRecentTrainingLoad(recentWorkouts, now = new Date(), windowDays = 14) {
   if (!Array.isArray(recentWorkouts)) {
-    return {
-      sessions: 0,
-      active_minutes: 0,
-    }
+    return { sessions: 0, active_minutes: 0, window_days: windowDays }
   }
 
-  const completedWorkouts =
-    recentWorkouts.filter(
-      (workout) => workout.completed
-    )
+  const endMs = now instanceof Date ? now.getTime() : new Date(now).getTime()
+  const startMs = endMs - (windowDays * 24 * 60 * 60 * 1000)
+  const completedWorkouts = recentWorkouts.filter((workout) => {
+    if (!workout?.completed || !workout?.completed_at) return false
+    const completedAt = new Date(workout.completed_at).getTime()
+    return Number.isFinite(completedAt) && completedAt >= startMs && completedAt <= endMs
+  })
 
-  const activeMinutes =
-    completedWorkouts.reduce(
-      (total, workout) =>
-        total +
-        Number(
-          workout.duration_minutes || 0
-        ),
-      0
-    )
+  const activeMinutes = completedWorkouts.reduce(
+    (total, workout) => total + Number(workout.duration_minutes || 0),
+    0,
+  )
 
   return {
     sessions: completedWorkouts.length,
     active_minutes: activeMinutes,
+    window_days: windowDays,
   }
+}
+
+function isEligiblePlannedWorkout(workout, todayKey, now = new Date()) {
+  if (!workout) return false
+  if (workout.scheduled_date) return String(workout.scheduled_date).slice(0, 10) <= todayKey
+  if (workout.created_at) {
+    const createdAt = new Date(workout.created_at).getTime()
+    return Number.isFinite(createdAt) && createdAt <= now.getTime()
+  }
+  return false
 }
 
 function calculateNutritionStatus(
@@ -142,21 +146,15 @@ function calculateNutritionStatus(
   }
 }
 
-function getCurrentWorkout(workouts, timeZone = 'UTC') {
+function getCurrentWorkout(workouts, timeZone = 'UTC', now = new Date()) {
   const safeWorkouts = Array.isArray(workouts) ? workouts : []
-  const today = dayKeyFromDate(new Date(), timeZone)
+  const today = dayKeyFromDate(now, timeZone)
 
-  return (
-    safeWorkouts.find(
-      (workout) =>
-        workout &&
-        workout.scheduled_date === today &&
-        !workout.completed
-    ) ||
-    safeWorkouts.find((workout) => workout && !workout.completed) ||
-    safeWorkouts[0] ||
-    null
-  )
+  // A current workout is only a workout scheduled for today and still incomplete.
+  // Older unfinished workouts must never silently become today's workout.
+  return safeWorkouts.find(
+    (workout) => workout && workout.scheduled_date === today && !workout.completed,
+  ) || null
 }
 
 const GOAL_LABELS = {
@@ -230,21 +228,20 @@ function buildUserState({
       (log) => log.completed
     )
 
-  const recentWorkouts =
-    safeWorkouts.slice(0, 10)
+  const recentWorkouts = safeWorkouts.slice(0, 50)
 
-  const trainingLoad =
-    calculateRecentTrainingLoad(
-      recentWorkouts
-    )
+  const trainingLoad = calculateRecentTrainingLoad(recentWorkouts, new Date(), 14)
 
-  const currentWorkout = getCurrentWorkout(safeWorkouts, timeZone)
+  const currentWorkout = getCurrentWorkout(safeWorkouts, timeZone, new Date())
 
-  const adherence =
-    calculateAdherence(
-      completedWorkouts.length,
-      safeWorkouts.length
-    )
+  const todayKey = dayKeyFromDate(new Date(), timeZone)
+  const eligiblePlannedWorkouts = safeWorkouts.filter((workout) =>
+    isEligiblePlannedWorkout(workout, todayKey, new Date())
+  )
+  const adherence = calculateAdherence(
+    eligiblePlannedWorkouts.filter((workout) => workout.completed).length,
+    eligiblePlannedWorkouts.length,
+  )
 
   const weeklyWorkoutTarget =
     activeGoal?.weekly_workout_target === null ||
@@ -359,6 +356,7 @@ function buildUserState({
 
       adherence_percentage:
         adherence,
+      eligible_planned_workouts: eligiblePlannedWorkouts.length,
 
       adherence_level:
         calculateWorkoutTrend(

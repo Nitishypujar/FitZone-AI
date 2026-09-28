@@ -30,12 +30,13 @@ function Workout() {
       const workoutList = Array.isArray(data.workouts) ? data.workouts : []
       setWorkouts(workoutList)
 
-      const exactWorkoutId = brain?.next_open_workout?.id || brain?.today_workout?.id
+      const exactWorkoutId = brain?.today_workout?.id || brain?.next_open_workout?.id
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date())
       const preferredWorkout =
         workoutList.find((workout) => String(workout.id) === String(exactWorkoutId)) ||
-        workoutList.find((workout) => workout.completed !== true && Array.isArray(workout.exercises) && workout.exercises.length > 0) ||
-        workoutList.find((workout) => Array.isArray(workout.exercises) && workout.exercises.length > 0) ||
-        workoutList[0]
+        workoutList.find((workout) => workout.scheduled_date === today && workout.completed !== true && Array.isArray(workout.exercises) && workout.exercises.length > 0) ||
+        workoutList.find((workout) => workout.scheduled_date === today && Array.isArray(workout.exercises) && workout.exercises.length > 0) ||
+        null
 
       if (preferredWorkout) {
         setSelectedWorkout(preferredWorkout)

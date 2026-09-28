@@ -18,8 +18,13 @@ export function useFitnessBrain(options = {}) {
   return useQuery({
     queryKey: [FITNESS_BRAIN_QUERY_KEY, timeZone],
     queryFn: async () => {
-      const data = await api.get(`/api/fitness/state?timezone=${encodeURIComponent(timeZone)}`)
-      return data
+      const data = await api.get(`/api/intelligence/snapshot?timezone=${encodeURIComponent(timeZone)}`)
+      const snapshot = data?.data || data
+      return {
+        status: data?.status || 'success',
+        ...snapshot,
+        intelligence: snapshot?.intelligence || snapshot,
+      }
     },
     enabled,
     staleTime: 10 * 1000,
