@@ -28,12 +28,14 @@ const legacyWeek = calculateWeeklyWorkoutProgress([
 assert.equal(legacyWeek.weekly_completed_workouts, 1)
 assert.equal(legacyWeek.weekly_active_minutes, 23)
 
+const today = new Date().toISOString().slice(0, 10)
+
 const state = buildUserState({
   profile: { primary_goal: 'General Fitness', fitness_level: 'Beginner', workout_days_per_week: 4, preferred_workout_duration: 30 },
   goals: [{ goal_type: 'general-fitness', weekly_workout_target: 5, weekly_active_minute_target: 200, completed: false }],
   workouts: [
     { id: 1, scheduled_date: '2026-09-20', completed: false },
-    { id: 2, scheduled_date: '2026-09-27', completed: false },
+    { id: 2, scheduled_date: today, completed: false },
   ],
   workoutLogs: [],
   nutritionToday: {},
