@@ -28,3 +28,4 @@ Thumbs.db
 # Generated personalization datasets
 ai-service/dataset/*.json
 ai-service/dataset/*.csv
+.vercel
