@@ -1,237 +1,455 @@
-# :muscle: FitZone AI
+# 💪 FitZone AI
 
-> An AI-powered fitness platform that combines workout tracking, nutrition planning, progress analysis, and adaptive recommendations into one intelligent fitness experience.
+> **An AI-powered fitness platform that turns real user activity into adaptive fitness recommendations.**
 
 **Plan → Train → Track → Analyze → Adapt → Repeat**
 
-FitZone AI is built around the idea that fitness recommendations should evolve from real user activity instead of remaining static plans.
+[![Live Demo](https://img.shields.io/badge/🌐%20Live%20Demo-FitZone%20AI-success?style=for-the-badge)](https://fitzone-ai-web.vercel.app)
+[![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-blue?style=flat-square)](https://react.dev/)
+[![Backend](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green?style=flat-square)](https://nodejs.org/)
+[![ML](https://img.shields.io/badge/ML-Python%20%2B%20FastAPI-orange?style=flat-square)](https://fastapi.tiangolo.com/)
+[![Database](https://img.shields.io/badge/Database-Supabase-3FCF8E?style=flat-square)](https://supabase.com/)
 
 ---
 
-## :sparkles: Key Features
+## 🚀 Live Project
 
-- :brain: **Adaptive Fitness Intelligence** — analyzes the user's current fitness state and determines the next best action.
-- :muscle: **Workout Management** — workout planning, exercise tracking, and completion tracking.
-- :bar_chart: **Progress Intelligence** — weekly activity, active minutes, workout history, streaks, and goal progress.
-- :apple: **Nutrition Planning** — calorie and protein targets based on the user's active fitness goal.
-- :robot: **AI Assistant** — uses Gemini to explain fitness decisions and answer user questions.
-- :dart: **Goal Management** — tracks workout frequency, activity targets, and fitness goals.
-- :lock: **Security & User Isolation** — authentication, validation, protected routes, CORS, and security middleware.
-- :arrows_counterclockwise: **Adaptive Recommendations** — recommendations respond to the user's current state and activity.
+### 🌐 [Open FitZone AI](https://fitzone-ai-web.vercel.app)
+
+**Production Status: 🟢 Fully Deployed & Operational**
+
+FitZone AI is deployed using a separated production architecture:
+
+| Service | Technology | Platform |
+|---|---|---|
+| Frontend | React + Vite | Vercel |
+| Backend | Node.js + Express | Render |
+| AI/ML Service | Python + FastAPI | Render |
+| Database | PostgreSQL / Supabase | Supabase |
+| AI Assistant | Gemini | Google |
+
+### Production Services
+
+- 🌐 **Frontend:** https://fitzone-ai-web.vercel.app
+- ⚙️ **Backend:** https://fitzone-ai-backend.onrender.com
+- 🧠 **AI/ML Service:** https://fitzone-ai-ml.onrender.com
+
+> `fitzoneai.com` has been added to the production project. DNS configuration is pending.
 
 ---
 
-## :brain: Fitness Intelligence
+## ✨ What Makes FitZone AI Different?
+
+FitZone AI is designed around a simple principle:
+
+> **Recommendations should evolve from real activity — not remain static plans.**
+
+Instead of treating AI as only a chatbot, the platform connects:
+
+**User Data → Fitness State → Recommendation → Real Activity → New Evidence**
+
+This creates a continuous adaptive fitness loop.
+
+---
+
+## 🧠 Fitness Intelligence
 
 The core of FitZone AI is the **Fitness Brain**.
 
 It combines signals such as:
 
-- Fitness goal
-- Experience level
-- Weekly workout activity
-- Active minutes
-- Recent workout completion
-- Progress toward targets
-- Readiness and behavioral signals
+- 🎯 Fitness goal
+- 📈 Experience level
+- 🏋️ Weekly workout activity
+- ⏱️ Active minutes
+- ✅ Recent workout completion
+- 📊 Progress toward targets
+- 🔄 Behavioral and readiness signals
 
-These signals are used to create an intelligence snapshot that powers the dashboard, AI Plan, workout experience, nutrition planning, and assistant.
+These signals help power the dashboard, AI Plan, workouts, nutrition planning, and adaptive recommendations.
 
 ### Recommendation ≠ Completion
 
-A recommendation is **not** treated as a completed workout.
+A recommendation is **never automatically treated as a completed workout**.
 
 Viewing or accepting a recommendation does not change workout completion data. Completion is recorded only when the actual workout is completed.
 
-This keeps **recommendation data** and **real activity data** separate.
+This keeps:
+
+**Recommendation Data ≠ Real Activity Data**
 
 ---
 
-## :building_construction: Architecture
+## 🏗️ Architecture
 
-**React + Vite**  
-↓  
-**Node.js + Express**  
-↓  
-**Fitness Brain + Recommendation System + Application APIs**  
-↓  
-**Supabase / PostgreSQL**
+```text
+                    ┌───────────────────┐
+                    │   React + Vite    │
+                    │     Frontend      │
+                    └─────────┬─────────┘
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │ Node.js + Express │
+                    │    Backend API    │
+                    └───────┬─────┬─────┘
+                            │     │
+              ┌─────────────┘     └──────────────┐
+              ▼                                  ▼
+     ┌─────────────────┐                ┌─────────────────┐
+     │ Supabase /      │                │ Python +        │
+     │ PostgreSQL      │                │ FastAPI ML      │
+     └─────────────────┘                └─────────────────┘
+                                              │
+                                              ▼
+                                    ┌─────────────────┐
+                                    │    Gemini AI    │
+                                    │    Assistant    │
+                                    └─────────────────┘
+```
 
-The backend also communicates with:
+### Core Intelligence Loop
 
-**Python + FastAPI ML Service**
+```text
+User Activity
+      ↓
+Fitness State
+      ↓
+Fitness Brain
+      ↓
+Recommendation
+      ↓
+Workout / Nutrition / Goals
+      ↓
+Real Activity
+      ↓
+New Evidence
+      ↓
+Updated Fitness State
+```
 
-and
-
-**Gemini AI**
-
-Gemini acts as an **explanation and interaction layer**. The application's fitness intelligence remains responsible for the actual recommendation logic.
+Gemini acts primarily as an **interaction and explanation layer**, while the application's fitness intelligence remains responsible for recommendation logic.
 
 ---
 
-## :hammer_and_wrench: Tech Stack
+## 💡 Key Features
 
-| Layer | Technology |
+| Feature | Description |
 |---|---|
-| Frontend | React, Vite |
-| Backend | Node.js, Express |
-| Database | PostgreSQL / Supabase |
-| AI Assistant | Gemini |
-| ML Service | Python, FastAPI |
-| Authentication | JWT / Application Authentication |
-| Styling | CSS |
-| Testing | Node Test Suite, ESLint, Vite Build |
-| Version Control | Git & GitHub |
+| 🧠 Adaptive Intelligence | Fitness recommendations based on current user state |
+| 🏋️ Workout Management | Plan, perform and track workouts |
+| 📊 Progress Intelligence | Activity, active minutes, streaks and goals |
+| 🍎 Nutrition Planning | Calorie and protein targets |
+| 🤖 AI Assistant | Gemini-powered fitness interaction |
+| 🎯 Goal Management | Fitness goals and weekly targets |
+| 🔄 Adaptive Recommendations | Recommendations evolve with activity |
+| 🔐 Secure Architecture | Authentication, validation, CORS and security middleware |
 
 ---
 
-## :iphone: Main Application Areas
+## 📱 Main Application Areas
 
 | Area | Purpose |
 |---|---|
-| **Dashboard** | Current fitness state, weekly activity, goals, and next recommended action |
+| **Dashboard** | Current fitness state, activity and recommended actions |
 | **My Workout** | Workout execution and completion tracking |
-| **AI Plan** | Current recommendation and reasoning |
-| **Progress** | Activity, workouts, active minutes, streaks, and goal progress |
+| **AI Plan** | Personalized recommendation and reasoning |
+| **Progress** | Activity, workouts, streaks and targets |
 | **Nutrition** | Calorie and protein targets |
-| **Goals** | Fitness objectives and weekly targets |
-| **AI Assistant** | Natural-language fitness interaction and explanations |
-| **Profile** | Personalization and account information |
+| **Goals** | Fitness objectives and weekly goals |
+| **AI Assistant** | Natural-language fitness interaction |
+| **Profile** | Account and personalization |
 
 ---
 
-## :lock: Engineering Principles
+## 🛠️ Tech Stack
 
-FitZone AI focuses on correctness and data integrity rather than simply adding AI features.
+### Frontend
 
-Key decisions include:
+- React
+- Vite
+- React Router
+- CSS
 
-- Workout completion is recorded only through the actual completion flow.
-- Recommendations are never automatically marked as completed.
-- Workout IDs remain compatible with the existing database schema.
-- Recommendation event IDs remain UUID-based.
-- User data is isolated between accounts.
-- Protected routes require authentication.
-- API inputs are validated.
-- Security middleware and CORS policies are configured.
-- Current intelligence is derived from application state rather than stale UI assumptions.
-- Completed workouts are not incorrectly presented as pending workouts.
+### Backend
+
+- Node.js
+- Express
+- JWT Authentication
+- REST APIs
+
+### AI / ML
+
+- Python
+- FastAPI
+- Machine Learning Services
+- Google Gemini
+
+### Data
+
+- PostgreSQL
+- Supabase
+
+### Deployment
+
+- Vercel
+- Render
+
+### Development
+
+- Git
+- GitHub
+- ESLint
+- Automated Backend Tests
 
 ---
 
-## :test_tube: Testing
+## 🔐 Engineering & Security
 
-The project includes automated checks covering:
+FitZone AI was built with data integrity and production security in mind.
 
-- Authentication and protected routes
+- 🔒 Protected authentication routes
+- 👤 User-data isolation
+- 🛡️ API input validation
+- 🌐 CORS allowlisting
+- 🪖 Helmet security middleware
+- 🔐 Content Security Policy
+- 🔒 HSTS in production
+- 🚫 Backend secrets kept server-side
+- 🚫 No committed `.env` files
+- 🚫 No backend secrets exposed in frontend bundles
+- ⚡ Rate limiting
+- 🔄 Secure authentication refresh flow
+
+---
+
+## 🧪 Testing & Verification
+
+The project has been verified across development and production environments.
+
+Testing and verification covers:
+
+- Authentication
+- Protected routes
 - User-data isolation
 - Workout completion behavior
 - Recommendation integrity
 - API validation
-- Security policies
 - CORS configuration
-- Assistant integration
+- Security policies
 - Nutrition functionality
-- Fitness intelligence behavior
+- AI Assistant integration
+- Fitness intelligence
 - Frontend linting
-- Frontend production build
+- Production build
+- Production API health
+- Production routing
+- Production security headers
+- React Router security updates
 
-The project is tested locally before major changes are finalized.
+### Production Flow Verified
 
----
-
-## :rocket: Running Locally
-
-### Clone the repository
-
-    git clone https://github.com/Nitishypujar/FitZone-AI.git
-    cd FitZone-AI
-
-### Install frontend dependencies
-
-    cd frontend
-    npm install
-
-### Install backend dependencies
-
-    cd ../backend
-    npm install
-
-### Install ML service dependencies
-
-    cd ../ai-service
-    pip install -r requirements.txt
-
-### Configure environment variables
-
-Create the required environment configuration for the frontend, backend, database, Gemini integration, and ML service.
-
-Never commit API keys, database credentials, or other secrets.
-
-### Start the services
-
-Run the frontend, backend, and ML service according to the project's local development configuration.
+```text
+Login
+  ↓
+Dashboard
+  ↓
+Workout
+  ↓
+AI Plan
+  ↓
+Progress
+  ↓
+Goals
+  ↓
+Nutrition
+  ↓
+AI Assistant
+  ↓
+Profile
+```
 
 ---
 
-## :file_folder: Project Structure
+## 📁 Project Structure
 
-    FitZone-AI/
-    ├── frontend/       # React + Vite application
-    ├── backend/        # Express API and application logic
-    ├── ai-service/     # Python ML service
-    ├── models/         # Model-related resources
-    ├── docs/           # Supporting documentation
-    ├── README.md
-    └── PROJECT_STATE.md
-
----
-
-## :crystal_ball: Future Direction
-
-- More personalized ML models as meaningful user data grows
-- Stronger behavioral and adherence modeling
-- More advanced workout adaptation
-- Improved nutrition intelligence
-- Deeper progress analytics
-- Expanded automated testing
-- Further performance and accessibility improvements
-
-The current system uses a **cold-start approach** rather than pretending that a large personalized ML dataset already exists.
+```text
+FitZone-AI/
+├── frontend/          # React + Vite frontend
+├── backend/           # Express API & application logic
+├── ai-service/        # Python FastAPI ML service
+├── models/            # Model resources
+├── docs/              # Documentation
+├── tools/             # Development utilities
+├── README.md
+└── PROJECT_STATE.md
+```
 
 ---
 
-## :bulb: Project Focus
+## 🚀 Run Locally
 
-FitZone AI is more than a fitness website with an AI chatbot.
+### 1. Clone the Repository
 
-Its central loop is:
+```bash
+git clone https://github.com/Nitishypujar/FitZone-AI.git
+cd FitZone-AI
+```
 
-**User Data → Fitness State → Recommendation → Real Activity → New Evidence**
+### 2. Install Frontend Dependencies
 
-The goal is to build a system where recommendations can become increasingly personalized as reliable user activity is collected.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 3. Install Backend Dependencies
+
+```bash
+cd ../backend
+npm install
+npm start
+```
+
+### 4. Install AI/ML Dependencies
+
+```bash
+cd ../ai-service
+pip install -r requirements.txt
+```
+
+Configure the required environment variables for the frontend, backend, Supabase, Gemini, and ML service.
+
+> ⚠️ Never commit API keys, database credentials, or other secrets.
 
 ---
 
-## :technologist: Author
+## ☁️ Production Architecture
 
-**Nitish Y Pujar**
+### Frontend — Vercel
 
-BTech AI/ML Student | Full-Stack & AI/ML Developer
+Responsible for:
 
-GitHub: **@Nitishypujar**
+- User interface
+- Authentication flow
+- Dashboard
+- Workout experience
+- Progress visualization
+- Nutrition interface
+- AI Assistant interface
 
----
+### Backend — Render
 
-## :pushpin: Project Status
+Responsible for:
 
-FitZone AI is an actively developed AI/full-stack project focused on:
-
-- Adaptive fitness intelligence
-- Recommendation systems
+- Authentication
+- Application APIs
+- Business logic
+- Fitness intelligence
+- Recommendations
 - Workout tracking
-- Nutrition planning
-- Progress analysis
-- Explainable AI-assisted interaction
+- Nutrition logic
+- Gemini integration
+- Database communication
 
-**Built with a focus on correctness, explainability, and practical engineering.**
+### AI/ML Service — Render
+
+Responsible for:
+
+- ML prediction functionality
+- Fitness intelligence model services
+- Model training and inference endpoints
+
+### Database — Supabase
+
+Responsible for persistent application data and user-related records.
+
+---
+
+## 🔄 Adaptive Fitness Loop
+
+FitZone AI is designed around a continuous feedback loop:
+
+```text
+User Data
+    ↓
+Fitness State
+    ↓
+Recommendation
+    ↓
+Real Activity
+    ↓
+New Evidence
+    ↓
+Updated Fitness State
+    ↓
+New Recommendation
+```
+
+The goal is to progressively personalize recommendations as reliable user activity is collected.
+
+---
+
+## 🧊 Cold-Start Strategy
+
+FitZone AI does not pretend to have a massive personalized dataset from day one.
+
+The current system uses available user information and application signals while collecting meaningful activity data.
+
+As reliable user data grows, the intelligence layer can progressively become more personalized.
+
+---
+
+## 🔮 Future Development
+
+- More personalized ML models
+- Stronger behavioral and adherence modeling
+- Advanced workout adaptation
+- Deeper nutrition intelligence
+- Expanded progress analytics
+- More automated testing
+- Performance optimization
+- Accessibility improvements
+- Advanced personalization
+
+---
+
+## 👨‍💻 Author
+
+### Nitish Y Pujar
+
+**BTech AI/ML Student · Full-Stack Developer · AI/ML Developer**
+
+🔗 **GitHub:** [@Nitishypujar](https://github.com/Nitishypujar)
+
+---
+
+## 📌 Project Status
+
+### 🟢 Production — Deployed & Operational
+
+FitZone AI currently includes:
+
+- ✅ Production frontend
+- ✅ Production backend
+- ✅ Production ML service
+- ✅ Supabase database
+- ✅ Gemini integration
+- ✅ Authentication
+- ✅ Adaptive fitness intelligence
+- ✅ Workout tracking
+- ✅ Nutrition planning
+- ✅ Progress analysis
+- ✅ Security controls
+- ✅ Production testing
+
+### 🌐 Try FitZone AI
+
+**[→ Open the Live Website](https://fitzone-ai-web.vercel.app)**
+
+---
+
+> **Built with a focus on practical AI, correctness, explainability, security, data integrity, and real-world engineering.**
+
+**Plan → Train → Track → Analyze → Adapt → Repeat**
